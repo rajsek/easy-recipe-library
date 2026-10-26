@@ -138,7 +138,7 @@ app.post('/api/pick', async (req, res) => {
   // ingredients/steps unknown. Diet filter applies via title-derived hints
   // only (unknown hints are excluded when a diet filter is set).
   let videoAlts: any[] = [];
-  if (result.picks.length > 0 && result.picks.length < 5 && note.trim()) {
+  if (result.picks.length < 5 && note.trim()) {
     try {
       const cardIds: Record<string, true> = {};
       for (const p of result.picks) { const m = String(p.url || '').match(/v=([\w-]{11})/); if (m) cardIds[m[1]] = true; }
