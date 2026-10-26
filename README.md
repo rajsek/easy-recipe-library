@@ -126,6 +126,29 @@ run `npm ci && npm run build`, and start with `npm start` (serves the API and
 the built frontend on `$PORT`, default 3000). No public Sheet and no public
 database are required.
 
+### Vercel (serverless)
+
+The repo is Vercel-ready: `server.ts` at the root re-exports the Express app
+for Vercel's zero-config Express support, and `vercel.json` builds the
+frontend into the function. Import the repo from GitHub, then set these
+environment variables in the project settings (same meaning as `.env`):
+
+- `DATA_MODE=live`, `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` (the full
+  service-account JSON on one line)
+- `APP_TOKEN` - required here: serverless binds no fixed host, so the app
+  relies on the token gate. The app opens with its unlock screen.
+
+`npm start` still works unchanged for local and traditional hosts: when the
+file is run directly it calls `listen()`; when a host imports it, it just
+exports the app. Serverless notes: demo mode's in-memory picks/history do not
+persist between function instances, so deploy with `DATA_MODE=live`; function
+execution must finish within the host's time limit (Vercel Hobby allows
+300s, far above this app's per-request Sheets calls). Cold starts can add a
+short delay to the first request; this varies and is not guaranteed. For an
+extra layer, Vercel's Deployment Protection ("All Deployments" scope with
+Vercel Authentication, and one shareable link, are included on the free Hobby
+plan) can gate the whole site in front of the app token.
+
 An alternative Google-native deployment of the same UI (Apps Script web app,
 no server to run) is in [`apps-script/`](apps-script/README.md). It cannot run
 locally, which is why this standalone app exists.
