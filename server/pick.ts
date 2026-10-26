@@ -32,9 +32,13 @@ export interface RecipeRow {
  * are a separate, weaker signal; the picker never uses them.
  */
 const NONVEG_RE = /egg|non-?veg|chicken|mutton|fish|prawn|shrimp|crab|meat|beef|pork/i;
-export function dietClass(diet?: string): 'veg' | 'nonveg' | 'unknown' {
+export function dietClass(diet?: string): 'veg' | 'nonveg' | 'veg-conditional' | 'unknown' {
   const s = String(diet || '').trim().toLowerCase();
   if (s === 'veg' || s === 'vegetarian') return 'veg';
+  // "Veg (needs eggless mayo dip)" style: plant-based ONLY with a stated
+  // adaptation. Not a plain-Veg pick (the egg risk is real), not Non-veg
+  // either - shown unfiltered and offerable by the AI with its caveat.
+  if (/^veg\b.*\(.+\)/.test(s)) return 'veg-conditional';
   if (NONVEG_RE.test(s)) return 'nonveg';
   return 'unknown';
 }
