@@ -245,8 +245,10 @@ export default function App() {
   const [picking, setPicking] = useState(false);
   const [askMode, setAskMode] = useState<'ai' | 'whatsapp'>('ai');
   const [askAiState, setAskAiState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
-  const [askAiAnswer, setAskAiAnswer] = useState('');
+  interface AskRecipe { name: string; url: string; time: string; diet: string; meal: string; reason: string }
+  const [askAiResult, setAskAiResult] = useState<{ text: string; recipes: AskRecipe[]; question: string; diet: string; meal: string } | null>(null);
   const [askAiError, setAskAiError] = useState('');
+  const [pickForm, setPickForm] = useState<{ note: string; diet: string; meal: string } | null>(null);
   const [aiOn, setAiOn] = useState(false);
 
   const loadHistory = useCallback(() => {
@@ -273,15 +275,17 @@ export default function App() {
   }, [tab, fch, fdiet, fq]);
 
   async function doAskAi() {
-    setAskAiState('sending'); setAskAiError(''); setAskAiAnswer('');
+    setAskAiState('sending'); setAskAiError(''); setAskAiResult(null);
+    const q = pnote.trim(); const d = pdiet; const m = pmeal;
     try {
       const r = await apiFetch('/api/ask-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: pnote.trim(), diet: pdiet, meal: pmeal })
+        body: JSON.stringify({ question: q, diet: d, meal: m })
       });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not get an answer'); }
-      const { answer } = await r.json();
-      setAskAiAnswer(answer); setAskAiState('done');
+      const { answer, recipes } = await r.json();
+      setAskAiResult({ text: answer, recipes: recipes || [], question: q, diet: d, meal: m });
+      setAskAiState('done');
     } catch (e: any) {
       setAskAiError(e.message || 'could not get an answer'); setAskAiState('error');
     }
@@ -295,6 +299,7 @@ export default function App() {
         body: JSON.stringify({ diet: pdiet, meal: pmeal, note: pnote })
       });
       setPickResult(await r.json());
+      setPickForm({ note: pnote, diet: pdiet, meal: pmeal });
       loadHistory();
     } finally {
       setPicking(false);
@@ -376,6 +381,9 @@ export default function App() {
 
         {tab === 'pick' && pickResult && (
           <div className="grid">
+            {pickForm && (pickForm.note !== pnote || pickForm.diet !== pdiet || pickForm.meal !== pmeal) && (
+              <p className="muted span-all">Note or filters changed since these picks - press "Give me 5 ideas" to refresh.</p>
+            )}
             {pickResult.note && <p className="muted span-all">{pickResult.note}</p>}
             {pickResult.noteInfo && <p className="muted span-all">{pickResult.noteInfo}</p>}
             {!pickResult.usedAI && (
@@ -417,11 +425,24 @@ export default function App() {
                   target="_blank" rel="noopener"
                 >Open WhatsApp to ask</a>
               )}
-              {askAiState === 'done' && (
+              {askAiState === 'done' && askAiResult && (
                 <div className="card" style={{ marginTop: 10 }}>
                   <div className="cardbody">
                     <h3>AI answer</h3>
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{askAiAnswer}</p>
+                    <p className="muted small">
+                      Answer to: "{askAiResult.question}" · {askAiResult.diet || 'Veg + Non-veg'} · {askAiResult.meal || 'Any meal'}
+                    </p>
+                    {(askAiResult.question !== pnote.trim() || askAiResult.diet !== pdiet || askAiResult.meal !== pmeal) && (
+                      <p className="chips"><span className="chip warn">note/filters changed since this answer - press "Ask about the note above" again</span></p>
+                    )}
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{askAiResult.text}</p>
+                    {askAiResult.recipes.map((p) => (
+                      <div key={p.name} style={{ borderTop: '1px solid #e5e0d8', paddingTop: 8, marginTop: 8 }}>
+                        <h3>{p.name}</h3>
+                        <Chips diet={p.diet} meal={p.meal} time={p.time} />
+                        <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
+                      </div>
+                    ))}
                     <p className="muted">AI suggestion, not a nutrition, allergy or safety guarantee.</p>
                   </div>
                 </div>
