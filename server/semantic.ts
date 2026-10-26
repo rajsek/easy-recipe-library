@@ -43,6 +43,7 @@ export function loadSemantic(): Promise<SemanticState> {
       return loadState;
     }
     const timeoutMs = Number(process.env.SEMANTIC_LOAD_TIMEOUT_MS || 20000);
+    loadState = { available: false, version: SEMANTIC_VERSION, reason: 'loading' };
     try {
       const load = (async () => {
         const { pipeline, env } = await import('@huggingface/transformers');
