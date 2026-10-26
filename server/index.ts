@@ -14,7 +14,8 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
-  getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode
+  getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
+  addQueueRequest, getQueueRequest
 } from './data.js';
 import { pickForMe, excludedIds } from './pick.js';
 import { buildRankFn } from './ai.js';
@@ -107,6 +108,29 @@ app.post('/api/pick', async (req, res) => {
   const result = await pickForMe(filter, note, recipes as any, ex, rankFn);
   await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
   res.json(result);
+});
+
+// Request queue ("ask in the app"): writes a row to the private Queue tab;
+// the owner's assistant answers there. Sheets mode only - honest 503 in demo.
+app.post('/api/ask', async (req, res) => {
+  if (mode === 'demo') return res.status(503).json({ error: 'Ask-in-app needs the Sheet connection, which demo mode does not have. Use the WhatsApp option meanwhile.' });
+  const diet = String(req.body?.diet || '');
+  const meal = String(req.body?.meal || '');
+  if (diet && !['Veg', 'Non-veg', 'Egg', 'Contains egg'].includes(diet)) return res.status(400).json({ error: 'bad diet' });
+  if (meal.length > 40) return res.status(400).json({ error: 'bad meal' });
+  const note = String(req.body?.note || '').slice(0, 200);
+  try {
+    const id = await addQueueRequest({ diet, meal, note });
+    res.json({ request_id: id });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'could not queue the request' });
+  }
+});
+app.get('/api/ask/:id', async (req, res) => {
+  if (mode === 'demo') return res.status(503).json({ error: 'Ask-in-app needs the Sheet connection, which demo mode does not have.' });
+  const r = await getQueueRequest(String(req.params.id || ''));
+  if (!r) return res.status(404).json({ error: 'unknown request' });
+  res.json(r);
 });
 
 // Built frontend (npm run build). In dev, use the Vite server instead.
