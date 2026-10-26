@@ -121,6 +121,7 @@ export function buildClassifyFn(): ClassifyFn | undefined {
       'food = an ingredient, dish, cuisine, allergen or drink (pasta, tofu, peanut, milk, bread, Italian).\n' +
       'mood = a cooking or eating preference (light, quick, spicy, comforting, kid-friendly).\n' +
       'If unsure, answer food.\n' +
+      'Obvious misspellings of an ingredient are still food ("panner", "panir" = paneer).\n' +
       'Words: ' + words.join(', ') + '\n' +
       'Reply with ONLY a JSON object mapping each word to "food" or "mood".';
     const out = await chat(prompt);
@@ -173,6 +174,9 @@ export async function askWithValidation(
     '"ids" lists the numbers of the recipes your answer uses (empty array if none); mention a recipe in "text" only when its number is in "ids". ' +
     'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
     'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
+    'The cook may make typos: read an obvious spelling variant as the ingredient it means ("panner" = "paneer") and say so in "text" ("taking panner as paneer"). ' +
+    'If a typo could mean two different ingredients, ask which one instead of guessing. ' +
+    'Hard constraints are never relaxed: only the recipes listed below may be cited, whatever the question asks for. ' +
     'Keep "text" under 120 words.\n\nVerified recipes:\n' + list +
     '\n\nFilters: ' + JSON.stringify(filter || {}) +
     '\nQuestion: ' + question + '\nJSON:';
