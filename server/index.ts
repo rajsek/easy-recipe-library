@@ -130,7 +130,19 @@ app.post('/api/pick', async (req, res) => {
   // relevant candidates BEFORE any AI call - smaller prompts, fewer tokens.
   // Hard constraints already ran; null (model unavailable) keeps the full pool.
   const slimFn = async (cs: any[]) => semanticRank((note || '') + ' ' + diet + ' ' + meal, cs, 12);
-  const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn, slimFn);
+  // "Load more" paging: the client sends the video ids it already shows
+  // (`seen`), so the next batch is disjoint WITHOUT relying on per-instance
+  // memory - serverless instances lose in-memory exclusions, which is what
+  // made repeat requests return the same batch. Seen exclusions are browsing
+  // only: they never touch the 30-day suggestion history.
+  const seenIds: Record<string, true> = {};
+  if (Array.isArray(req.body?.seen)) {
+    for (const v of req.body.seen.slice(0, 500)) {
+      const id = String(v || '');
+      if (/^[\w-]{11}$/.test(id)) seenIds[id] = true;
+    }
+  }
+  const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn, slimFn, seenIds);
   await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
   // Discovery fill: when fewer than 5 checked recipes qualify, offer labelled
   // full-corpus video alternatives so a thin checked pool is not a dead end.
@@ -142,6 +154,7 @@ app.post('/api/pick', async (req, res) => {
     try {
       const cardIds: Record<string, true> = {};
       for (const p of result.picks) { const m = String(p.url || '').match(/v=([\w-]{11})/); if (m) cardIds[m[1]] = true; }
+      for (const id of Object.keys(seenIds)) cardIds[id] = true; // no repeats across pages
       const found = await retrieveVideos(note + ' ' + diet + ' ' + meal, 12, cardIds);
       const dietOk = (h: string) => {
         const hl = String(h || '').toLowerCase();
