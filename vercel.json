@@ -3,11 +3,7 @@
   "buildCommand": "npm run build",
   "functions": {
     "server.ts": {
-      "includeFiles": [
-        "web/dist/**",
-        "server/demo-data.json",
-        "server/demo-embeddings.json"
-      ]
+      "includeFiles": "{web/dist/**,server/demo-data.json,server/demo-embeddings.json}"
     }
   }
 }
