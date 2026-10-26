@@ -243,16 +243,18 @@ export default function App() {
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const [pickResult, setPickResult] = useState<PickResult | null>(null);
   const [picking, setPicking] = useState(false);
-  const [askState, setAskState] = useState<'idle' | 'sending' | 'pending' | 'done' | 'error'>('idle');
-  const [askAnswer, setAskAnswer] = useState('');
-  const [askError, setAskError] = useState('');
+  const [askMode, setAskMode] = useState<'ai' | 'whatsapp'>('ai');
+  const [askAiState, setAskAiState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
+  const [askAiAnswer, setAskAiAnswer] = useState('');
+  const [askAiError, setAskAiError] = useState('');
+  const [aiOn, setAiOn] = useState(false);
 
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
   }, []);
 
   useEffect(() => {
-    apiFetch('/api/state').then((r) => r.json()).then((s) => setDataMode(s.mode)).catch(() => {});
+    apiFetch('/api/state').then((r) => r.json()).then((s) => { setDataMode(s.mode); setAiOn(!!s.ai); }).catch(() => {});
     apiFetch('/api/channels').then((r) => r.json()).then(setChannels).catch(() => {});
     apiFetch('/api/recipes').then((r) => r.json()).then(setRecipes).catch(() => {});
     loadHistory();
@@ -270,31 +272,18 @@ export default function App() {
     apiFetch('/api/videos?' + params).then((r) => r.json()).then(setVideos).catch(() => setVideos([]));
   }, [tab, fch, fdiet, fq]);
 
-  async function doAsk() {
-    setAskState('sending'); setAskError(''); setAskAnswer('');
+  async function doAskAi() {
+    setAskAiState('sending'); setAskAiError(''); setAskAiAnswer('');
     try {
-      const r = await apiFetch('/api/ask', {
+      const r = await apiFetch('/api/ask-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ diet: pdiet, meal: pmeal, note: pnote })
+        body: JSON.stringify({ question: pnote.trim(), diet: pdiet, meal: pmeal })
       });
-      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not send'); }
-      const { request_id } = await r.json();
-      setAskState('pending');
-      const deadline = Date.now() + 12 * 60 * 1000;
-      const poll = async () => {
-        try {
-          const pr = await apiFetch('/api/ask/' + request_id);
-          if (pr.ok) {
-            const data = await pr.json();
-            if (data.status === 'done') { setAskAnswer(data.answer); setAskState('done'); return; }
-          }
-        } catch { /* keep polling */ }
-        if (Date.now() < deadline) setTimeout(poll, 20000);
-        else { setAskError('Still waiting - replies usually land within about 15 minutes. Come back to this tab later.'); setAskState('error'); }
-      };
-      setTimeout(poll, 20000);
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not get an answer'); }
+      const { answer } = await r.json();
+      setAskAiAnswer(answer); setAskAiState('done');
     } catch (e: any) {
-      setAskError(e.message || 'could not send the request'); setAskState('error');
+      setAskAiError(e.message || 'could not get an answer'); setAskAiState('error');
     }
   }
 
@@ -392,22 +381,53 @@ export default function App() {
             {!pickResult.usedAI && (
               <p className="muted span-all">AI ranking is off until you choose a provider; these are unranked matches. Ask in chat for a reasoned pick.</p>
             )}
-            <p className="span-all">
-              <a
-                className="btn"
-                href={'https://wa.me/16508702892?text=' + encodeURIComponent(
-                  'Meal pick request from my recipe app:\n' +
-                  'Diet: ' + (pdiet || 'Veg + Non-veg') + '\n' +
-                  'Meal: ' + (pmeal || 'any') +
-                  (pnote.trim() ? '\nNote: ' + pnote.trim() : '') +
-                  '\nPlease pick from my recipe library.'
-                )}
-                target="_blank" rel="noopener"
-              >Open WhatsApp to ask</a>{' '}
-              <button className="btn" disabled title="Being set up - not live yet">
-                Ask Instinct here (coming soon)
-              </button>
-            </p>
+            <div className="span-all">
+              <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input type="radio" name="askmode" checked={askMode === 'ai'} onChange={() => setAskMode('ai')} disabled={!aiOn} />
+                  Instant AI answer{!aiOn ? ' (AI off)' : ''}
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input type="radio" name="askmode" checked={askMode === 'whatsapp'} onChange={() => setAskMode('whatsapp')} />
+                  WhatsApp
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 4, opacity: 0.6 }} title="Being set up - not live yet">
+                  <input type="radio" name="askmode" disabled />
+                  Ask Instinct (coming soon)
+                </label>
+              </div>
+              {askMode === 'ai' && aiOn && (
+                <>
+                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || !pnote.trim()}>
+                    {askAiState === 'sending' ? 'Asking...' : 'Ask about the note above'}
+                  </button>
+                  {!pnote.trim() && <p className="muted">Type a note or question above first.</p>}
+                </>
+              )}
+              {askMode === 'whatsapp' && (
+                <a
+                  className="btn"
+                  href={'https://wa.me/16508702892?text=' + encodeURIComponent(
+                    'Meal pick request from my recipe app:\n' +
+                    'Diet: ' + (pdiet || 'Veg + Non-veg') + '\n' +
+                    'Meal: ' + (pmeal || 'any') +
+                    (pnote.trim() ? '\nNote: ' + pnote.trim() : '') +
+                    '\nPlease pick from my recipe library.'
+                  )}
+                  target="_blank" rel="noopener"
+                >Open WhatsApp to ask</a>
+              )}
+              {askAiState === 'done' && (
+                <div className="card" style={{ marginTop: 10 }}>
+                  <div className="cardbody">
+                    <h3>AI answer</h3>
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{askAiAnswer}</p>
+                    <p className="muted">AI suggestion, not a nutrition, allergy or safety guarantee.</p>
+                  </div>
+                </div>
+              )}
+              {askAiState === 'error' && <p className="muted">{askAiError}</p>}
+            </div>
             {pickResult.usedAI && (
               <p className="muted span-all">Reasons are AI taste suggestions, not nutrition, allergy or safety guarantees.</p>
             )}
