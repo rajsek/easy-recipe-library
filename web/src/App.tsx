@@ -263,6 +263,7 @@ export default function App() {
   const [traces, setTraces] = useState<TraceRow[]>([]);
   const [tracesNote, setTracesNote] = useState('');
   const [aiOn, setAiOn] = useState(false);
+  const [semanticInfo, setSemanticInfo] = useState<{ available: boolean; reason?: string; version?: string } | null>(null);
 
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
@@ -276,7 +277,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    apiFetch('/api/state').then((r) => r.json()).then((s) => { setDataMode(s.mode); setAiOn(!!s.ai); }).catch(() => {});
+    apiFetch('/api/state').then((r) => r.json()).then((s) => { setDataMode(s.mode); setAiOn(!!s.ai); setSemanticInfo(s.semantic || null); }).catch(() => {});
     apiFetch('/api/channels').then((r) => r.json()).then(setChannels).catch(() => {});
     apiFetch('/api/recipes').then((r) => r.json()).then(setRecipes).catch(() => {});
     loadHistory();
@@ -306,6 +307,7 @@ export default function App() {
       const j = await r.json();
       setAskAiResult({ text: j.answer, recipes: j.recipes || [], question: q, diet: j.session?.diet ?? d, meal: j.session?.meal ?? m });
       setSessionInfo(j.session ? { continued: !!j.session.continued, diet: j.session.diet || '', meal: j.session.meal || '' } : null);
+      apiFetch('/api/state').then((r) => r.json()).then((s) => setSemanticInfo(s.semantic || null)).catch(() => {});
       setAskAiState('done');
     } catch (e: any) {
       setAskAiError(e.message || 'could not get an answer'); setAskAiState('error');
@@ -487,6 +489,9 @@ export default function App() {
                       </div>
                     ))}
                     <p className="muted">AI suggestion, not a nutrition, allergy or safety guarantee.</p>
+                    {semanticInfo && (
+                      <p className="muted small">Meaning layer: {semanticInfo.available ? 'ready (local model, nothing sent out for matching)' : (semanticInfo.reason === 'loading' ? 'loading on this server - standard word rules used meanwhile' : 'not active' + (semanticInfo.reason ? ' (' + semanticInfo.reason + ')' : '') + ' - standard word rules in use')}</p>
+                    )}
                   </div>
                 </div>
               )}
