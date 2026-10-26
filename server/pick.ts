@@ -201,6 +201,10 @@ export async function pickForMe(
       }
     } catch {
       chosen = candidates.slice(0, 5); // honest fallback: unranked
+      if (note && note.trim()) {
+        noteInfo = (noteInfo ? noteInfo + ' ' : '') +
+          'AI ranking failed this time, so the note was applied only by the simple word rules above - nothing was silently reinterpreted.';
+      }
     }
   }
 
