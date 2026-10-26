@@ -276,7 +276,7 @@ export default function App() {
     return id;
   });
   const [sessionInfo, setSessionInfo] = useState<{ continued: boolean; diet: string; meal: string } | null>(null);
-  const [pickForm, setPickForm] = useState<{ note: string; diet: string; meal: string; dishes: string[]; ings: string[] } | null>(null);
+  const [pickForm, setPickForm] = useState<{ note: string; composed: string; diet: string; meal: string; dishes: string[]; ings: string[] } | null>(null);
   interface TraceRow { request_id: string; ts: string; mode: string; request_text: string; outbound_payload: string; reply_text: string; handling: string; status: string; error?: string }
   const [traces, setTraces] = useState<TraceRow[]>([]);
   const [tracesNote, setTracesNote] = useState('');
@@ -393,7 +393,7 @@ export default function App() {
       });
       const j = await r.json();
       setPickResult(j);
-      setPickForm({ note: pnote, diet: pdiet, meal: pmeal, dishes: selDishes, ings: selIngs });
+      setPickForm({ note: pnote, composed: composedNote(), diet: pdiet, meal: pmeal, dishes: selDishes, ings: selIngs });
       // Load-more paging state: ids already on screen are sent back as `seen`
       // so the next batch is disjoint (per-instance memory is unreliable on
       // serverless; the client list is the source of truth for paging).
@@ -412,7 +412,7 @@ export default function App() {
     try {
       const r = await apiFetch('/api/pick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ diet: pickForm.diet, meal: pickForm.meal, note: pickForm.note, dishes: pickForm.dishes, seen: seenIds })
+        body: JSON.stringify({ diet: pickForm.diet, meal: pickForm.meal, note: pickForm.composed, dishes: pickForm.dishes, seen: seenIds })
       });
       const j = await r.json();
       const np = j.picks || [], nv = j.videos || [];
