@@ -89,6 +89,17 @@ const ASK_REQUEST_WORDS = new Set(('breakfast lunch dinner snack snacks sweet sw
   'is are was were be been the in on for of to at by with without and or not no can could should would will please get got ' +
   'something anything everything').split(' '));
 
+// Inventory/direct lookups about the library itself ("which bread recipes do
+// I have?", "how do I make X?", "list my chutneys") are not recommendation
+// requests: the 30-day no-repeat, an anti-repetition rule for NEW
+// suggestions, must not hide owned recipes from an answer about what the
+// cook already has. (Implementation judgment: the user's stated intent is
+// avoiding repeat meals, not hiding their inventory.)
+const LOOKUP_RE = /\b(?:do i have|do we have|which [a-z -]{0,40}have|what [a-z -]{0,40}have|list|show me|how (?:do i|to) (?:make|cook)|recipe for|steps for|ingredients for|tell me about)/i;
+export function isLookupQuestion(question: string): boolean {
+  return LOOKUP_RE.test(String(question || ''));
+}
+
 // The ask-ai route's hard constraints, mirroring pick rules:
 //  - "no X" / "without X" exclusions are ALWAYS hard
 //  - recently suggested/cooked recipes (30-day no-repeat) stay hidden UNLESS
@@ -112,7 +123,7 @@ export function constrainAskCandidates(
   }
   const q = question.toLowerCase();
   const shortOf = (s: string) => String(s || '').split('(')[0].trim().toLowerCase();
-  out = out.filter((r) => {
+  if (!isLookupQuestion(question)) out = out.filter((r) => {
     const short = shortOf(r.recipe_name);
     if (short.length >= 4 && q.indexOf(short) !== -1) return true; // asked about by name: always answerable
     const id = videoIdOf(r.video_url);
