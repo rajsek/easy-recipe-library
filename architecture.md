@@ -7,7 +7,7 @@ IDs stable so `git diff` shows exactly what each change touched.
 ## Current state (as of 2026-10-26, commit 7c091b5)
 
 Live on Vercel (Hobby, free tier), demo-snapshot mode: the app serves a dated
-copy of the recipe library (57 verified + 1 partial recipe cards, 4468-video
+copy of the recipe library (61 verified + 1 partial recipe cards = 62 cards, 4468-video
 index). Saves/history are per-instance memory and reset on restart.
 
 ## Request flow (diagram)
