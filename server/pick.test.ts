@@ -176,3 +176,16 @@ test('word boundaries: "breadless" title does not satisfy "bread"; exclusion "no
   assert.ok(!names2.includes('Corn Cutlet'), 'corn excluded');
   assert.ok(names2.includes('Popcorn Bowl'), 'popcorn not caught by no corn');
 });
+
+test('AI on + keyword nothing mentions: ranker interprets the note instead of zeroing', async () => {
+  const rows = [
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH1', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal, oil', verified: 'yes' },
+    { recipe_name: 'Fruit Salad', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH2', diet: 'Veg', meal_type: 'snack', ingredients: 'apple, banana', verified: 'yes' },
+  ];
+  const rankFn = async (cands: any[]) => ({ order: [1, 0], reasons: { 1: 'lighter option' } });
+  const r = await pickForMe({}, 'something light', rows as any, {}, rankFn);
+  assert.equal(r.usedAI, true);
+  assert.equal(r.picks[0].name, 'Fruit Salad');
+  assert.match(r.noteInfo, /ranked by meaning/);
+  assert.equal(r.count, 2, 'no zeroing when AI can interpret');
+});
