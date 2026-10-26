@@ -51,7 +51,7 @@ export function dietClass(diet?: string): 'veg' | 'nonveg' | 'unknown' {
  * A note we cannot parse into keywords is ignored and reported as ignored.
  * No semantic claims are made - that needs the opt-in AI ranker.
  */
-const NOTE_STOP = new Set(('the a an and or for with without something anything me my we us our please want ' +
+const NOTE_STOP = new Set(('the a an and or for with without something anything me my we us our please want using use make ' +
   'like love make made dish dishes recipe recipes food some that this these those today tonight kids kid ' +
   'friendly style type eat eating have get give show pick ideas idea will would shall should can could ' +
   'may might must just really very also still even ever never any every too yet').split(' '));
@@ -114,12 +114,19 @@ export function excludedIds(history: any[], picks: any[], now = new Date()): Rec
 export type RankFn = (candidates: RecipeRow[], filter: PickFilter, note: string)
   => Promise<{ order: number[]; reasons: Record<number, string> }>;
 
+// Classifies unmatched note words: 'food' = ingredient, dish, cuisine,
+// allergen, drink (a HARD requirement - no match means an honest zero,
+// never an unrelated "close enough" fallback); 'mood' = a soft preference
+// (light, quick, spicy, kid-friendly) the ranker may interpret by meaning.
+export type ClassifyFn = (words: string[]) => Promise<Record<string, 'food' | 'mood' | 'unknown'>>;
+
 export async function pickForMe(
   filter: PickFilter,
   note: string,
   recipes: RecipeRow[],
   excluded: Record<string, true>,
-  rankFn?: RankFn
+  rankFn?: RankFn,
+  classifyFn?: ClassifyFn
 ): Promise<PickResult> {
   let blockedByHistory = 0;
   let candidates = recipes.filter((r) => {
@@ -178,10 +185,25 @@ export async function pickForMe(
       candidates = matched;
       parts.push('showing only recipes whose name or ingredients match ' + parsed.keywords.map((k) => '"' + k + '"').join(', '));
     } else if (rankFn) {
-      // A word nothing mentions literally (a mood like "light") must not
-      // zero the result when AI is available: the ranker interprets the
-      // note over the rule-filtered candidates instead, and says so.
-      parts.push('no recipe name or ingredient mentions ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
+      // A word nothing mentions literally may only become a soft
+      // ranked-by-meaning wish when the classifier says it is clearly a
+      // mood/preference. Foods, dishes, cuisines, allergens - and any word
+      // the classifier cannot place or fails on - stay HARD requirements:
+      // no match means an honest zero, never an unrelated fallback.
+      let allMood = false;
+      if (classifyFn) {
+        try {
+          const cls = await classifyFn(parsed.keywords);
+          allMood = parsed.keywords.every((k) => cls[k] === 'mood');
+        } catch { allMood = false; }
+      }
+      if (allMood) {
+        parts.push('no recipe name or ingredient mentions ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
+      } else {
+        candidates = [];
+        noteZeroMatch = true;
+        parts.push('no verified recipe matches ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' under these filters - nothing filled in; try fewer filters or a different note');
+      }
     } else {
       candidates = [];
       noteZeroMatch = true;
