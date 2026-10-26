@@ -116,8 +116,11 @@ export async function getVideos(filter: VideoFilter) {
     if (q && String(r.title).toLowerCase().indexOf(q) === -1) return false;
     return true;
   }).slice(0, 300).map((r) => ({
-    id: r.video_id, title: r.title, channel: r.channel, url: r.url,
-    thumb: r.thumbnail_url, views: r.views, category: r.category,
+    id: r.video_id, title: r.title, channel: r.channel,
+    // url/thumb columns are omitted from the snapshot (derivable from the id)
+    url: r.url || (r.video_id ? 'https://www.youtube.com/watch?v=' + r.video_id : ''),
+    thumb: r.thumbnail_url || (r.video_id ? 'https://i.ytimg.com/vi/' + r.video_id + '/mqdefault.jpg' : ''),
+    views: r.views, category: r.category,
     diet: r.diet_hint, published: r.yt_publish_date || '', status: r.extraction_status
   }));
 }
