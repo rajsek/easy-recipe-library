@@ -140,7 +140,7 @@ test('positive note keyword: deterministic boost, name match wins', async () => 
   ];
   const r = await pickForMe({}, 'pepper', rows as any, {});
   assert.deepEqual(r.picks.map((p) => p.name), ['Pepper Rasam'], 'note keyword is a hard filter, not a boost');
-  assert.match(r.noteInfo, /match "pepper"/);
+  assert.match(r.noteInfo, /match at least one of "pepper"/);
 });
 
 test('note "bread" + veg + snack: only bread recipes returned, never an unrelated snack', async () => {
@@ -150,7 +150,7 @@ test('note "bread" + veg + snack: only bread recipes returned, never an unrelate
   ];
   const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'bread', rows as any, {});
   assert.deepEqual(r.picks.map((p) => p.name), ['Besan Bread Toast']);
-  assert.match(r.noteInfo, /match "bread"/);
+  assert.match(r.noteInfo, /match at least one of "bread"/);
 });
 
 test('note keyword nothing matches: honest zero, no filler', async () => {
@@ -159,7 +159,9 @@ test('note keyword nothing matches: honest zero, no filler', async () => {
   ];
   const r = await pickForMe({}, 'pasta', rows as any, {});
   assert.equal(r.count, 0);
-  assert.match(r.noteInfo, /no verified recipe matches "pasta"/);
+  assert.match(r.noteInfo, /no verified recipe matches everything/);
+  assert.match(r.noteInfo, /0 list "pasta"/);
+  assert.match(r.noteInfo, /gap in the checked library, not proof the dish does not exist/);
 });
 
 test('word boundaries: "breadless" title does not satisfy "bread"; exclusion "no corn" spares "popcorn"', async () => {
@@ -217,7 +219,8 @@ test('unmatched FOOD word stays a hard constraint even with AI on ("with tofu")'
   const classifyFn = async () => ({ tofu: 'food' as const });
   const r = await pickForMe({}, 'with tofu', hardRows as any, {}, moodRank, classifyFn);
   assert.equal(r.count, 0, 'tofu is an ingredient: honest zero, never unrelated fallback');
-  assert.match(r.noteInfo, /no verified recipe matches "tofu"/);
+  assert.match(r.noteInfo, /no verified recipe matches everything/);
+  assert.match(r.noteInfo, /0 list "tofu"/);
 });
 
 test('unmatched FOOD word stays hard ("using pasta")', async () => {
@@ -237,7 +240,8 @@ test('classifier failure is conservative: zero, not semantic fallback', async ()
   const classifyFn = async () => { throw new Error('provider down'); };
   const r = await pickForMe({}, 'something light', hardRows as any, {}, moodRank, classifyFn);
   assert.equal(r.count, 0);
-  assert.match(r.noteInfo, /no verified recipe matches "light"/);
+  assert.match(r.noteInfo, /no verified recipe matches everything/);
+  assert.match(r.noteInfo, /0 list "light"/);
 });
 
 test('exclusions are hard regardless of classifier ("no peanut", "without milk")', async () => {
@@ -265,4 +269,70 @@ test('data hygiene: a card tagged Veg must never list egg in its ingredients', (
     (x) => String(x.diet).trim().toLowerCase() === 'veg' && /\beggs?\b/i.test(String(x.ingredients))
   );
   assert.deepEqual(bad.map((b) => b.recipe_name), [], 'Veg-tagged cards containing egg: ' + bad.map((b) => b.recipe_name).join(','));
+});
+
+test('typo tolerance: "panner" normalizes to "paneer" (source-backed alias), visibly interpreted', async () => {
+  const ex = excludedIds([], [], NOW);
+  const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'onion, panner', RECIPES, ex);
+  assert.deepEqual(r.interpreted, [{ from: 'panner', to: 'paneer' }]);
+  assert.ok(/paneer/.test(r.noteInfo), 'note info names the normalized word');
+});
+
+test('typo tolerance: unambiguous edit-distance-1 typo normalizes to the library word', async () => {
+  const ex = excludedIds([], [], NOW);
+  const r = await pickForMe({ diet: 'Veg' }, 'onin', RECIPES, ex);
+  assert.deepEqual(r.interpreted, [{ from: 'onin', to: 'onion' }]);
+  assert.ok(r.count > 0, 'onion typo still matches onion recipes');
+  assert.ok(/match at least one of "onion"/.test(r.noteInfo), 'normalized word visible: ' + r.noteInfo);
+});
+
+test('typo ambiguity never guesses: word stays as written and yields an honest zero', async () => {
+  const { normalizeNoteWord } = await import('./pick.js');
+  const n = normalizeNoteWord('chill', ['chili', 'chilli', 'salt']);
+  assert.equal(n.word, 'chill');
+  assert.equal(n.interpreted, undefined);
+});
+
+test('typo tolerance: no normalization for short words, unknown words, or words already in the library', async () => {
+  const { normalizeNoteWord } = await import('./pick.js');
+  assert.equal(normalizeNoteWord('soy', ['soya']).word, 'soy');
+  assert.equal(normalizeNoteWord('quinoa', ['onion', 'paneer']).word, 'quinoa');
+  assert.equal(normalizeNoteWord('onion', ['onion', 'paneer']).word, 'onion');
+});
+
+test('note keywords are ORed and say so plainly: "onion, panner" yields onion snacks with the typo interpreted', async () => {
+  const ex = excludedIds([], [], NOW);
+  const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'onion, panner', RECIPES, ex);
+  assert.ok(r.count > 0, 'onion-matching snacks qualify');
+  assert.deepEqual(r.interpreted, [{ from: 'panner', to: 'paneer' }]);
+  assert.ok(/interpreted "panner" as "paneer"/.test(r.noteInfo), 'interpretation visible');
+  assert.ok(/match at least one of "onion", "paneer"/.test(r.noteInfo), 'OR wording is explicit: ' + r.noteInfo);
+});
+
+test('no-match wording is transparent: coverage counts, interpretation, library-gap honesty', async () => {
+  const ex = excludedIds([], [], NOW);
+  const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'panner', RECIPES, ex);
+  assert.equal(r.count, 0, 'no veg snack lists paneer in demo data');
+  assert.ok(/interpreted "panner" as "paneer"/.test(r.noteInfo), 'interpretation visible');
+  assert.ok(/checked \d+ verified Veg snack recipes: 0 list "paneer"/.test(r.noteInfo), 'deterministic coverage counts: ' + r.noteInfo);
+  assert.ok(/gap in the checked library, not proof the dish does not exist/.test(r.noteInfo), 'gap-not-impossibility wording');
+});
+
+test('ask route: typo normalized to a library ingredient is a hard food constraint without the classifier', async () => {
+  const { constrainAskCandidates, noteVocab } = await import('./pick.js');
+  const vocab = noteVocab(RECIPES);
+  const { candidates, zeroReason, interpreted } = constrainAskCandidates(RECIPES, 'something with onin please', { titles: {}, videoOnly: {} }, {}, vocab);
+  assert.deepEqual(interpreted, [{ from: 'onin', to: 'onion' }]);
+  assert.ok(!zeroReason, 'onion typo still matches onion recipes');
+  assert.ok(candidates.every((c) => /onion/i.test(c.recipe_name + ' ' + c.ingredients)), 'only onion-matching candidates survive');
+});
+
+test('ask route zero: coverage + interpretation in the reason', async () => {
+  const { constrainAskCandidates, noteVocab } = await import('./pick.js');
+  const vocab = noteVocab(RECIPES);
+  const { candidates, zeroReason, interpreted } = constrainAskCandidates(RECIPES, 'snack with panner', { titles: {}, videoOnly: {} }, {}, vocab);
+  assert.equal(candidates.length, 0);
+  assert.deepEqual(interpreted, [{ from: 'panner', to: 'paneer' }]);
+  assert.ok(/0 list "paneer"/.test(zeroReason || ''), zeroReason);
+  assert.ok(/library gap/.test(zeroReason || ''), zeroReason);
 });
