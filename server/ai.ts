@@ -5,10 +5,11 @@
  * 30-day no-repeat, diet filter, note word requirements). It can never add,
  * un-exclude, or un-verify a recipe.
  *
- * Privacy: the prompt below is the ONLY place request data leaves this
- * server. It contains candidate recipe names/diets/meals/time notes plus the
- * user's diet/meal filter and note text. History, favourites, identity and
- * Sheet details are never sent.
+ * Privacy: the two prompts below are the ONLY places request data leaves
+ * this server. They contain candidate recipe names/diets/meals/time notes,
+ * the user's diet/meal filter and note text, and single unmatched note
+ * words for classification. History, favourites, identity and Sheet
+ * details are never sent.
  *
  * Supported providers (AI_PROVIDER value -> required env):
  *   groq       -> GROQ_API_KEY        (default model openai/gpt-oss-120b; override: GROQ_MODEL)
@@ -16,7 +17,7 @@
  *                 (model override: CLOUDFLARE_MODEL)
  *   gemini     -> GEMINI_API_KEY      (model override: GEMINI_MODEL)
  */
-import type { RankFn, RecipeRow, PickFilter } from './pick.js';
+import type { RankFn, RecipeRow, PickFilter, ClassifyFn } from './pick.js';
 
 const TIMEOUT_MS = 15000;
 
@@ -88,15 +89,48 @@ async function chatGemini(prompt: string) {
   return String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
 }
 
-export function buildRankFn(): { rankFn?: RankFn; provider: string } {
+type ChatFn = (prompt: string) => Promise<string>;
+
+function resolveChat(): { chat?: ChatFn; provider: string } {
   const p = String(process.env.AI_PROVIDER || '').toLowerCase();
-  let chat: ((prompt: string) => Promise<string>) | undefined;
+  let chat: ChatFn | undefined;
   if (p === 'groq' && process.env.GROQ_API_KEY) chat = chatGroq;
   else if (p === 'cloudflare' && process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) chat = chatCloudflare;
   else if (p === 'gemini' && process.env.GEMINI_API_KEY) chat = chatGemini;
+  return { chat, provider: chat ? p : '' };
+}
+
+export function buildRankFn(): { rankFn?: RankFn; provider: string } {
+  const { chat, provider } = resolveChat();
   if (!chat) return { provider: '' };
   return {
-    provider: p,
-    rankFn: async (candidates, filter, note) => parseAnswer(await chat!(buildPrompt(candidates, filter, note)))
+    provider,
+    rankFn: async (candidates, filter, note) => parseAnswer(await chat(buildPrompt(candidates, filter, note)))
+  };
+}
+
+// Classifies unmatched note words so the picker can tell a missing
+// ingredient (hard requirement) from a mood (soft preference). Conservative
+// by contract: anything not clearly a mood comes back as food/unknown.
+export function buildClassifyFn(): ClassifyFn | undefined {
+  const { chat } = resolveChat();
+  if (!chat) return undefined;
+  return async (words: string[]) => {
+    const prompt =
+      'Classify each word as "food" or "mood".\n' +
+      'food = an ingredient, dish, cuisine, allergen or drink (pasta, tofu, peanut, milk, bread, Italian).\n' +
+      'mood = a cooking or eating preference (light, quick, spicy, comforting, kid-friendly).\n' +
+      'If unsure, answer food.\n' +
+      'Words: ' + words.join(', ') + '\n' +
+      'Reply with ONLY a JSON object mapping each word to "food" or "mood".';
+    const out = await chat(prompt);
+    const m2 = out.match(/\{[\s\S]*\}/);
+    if (!m2) return Object.fromEntries(words.map((w) => [w, 'unknown' as const]));
+    try {
+      const parsed = JSON.parse(m2[0]);
+      return Object.fromEntries(words.map((w) => [w, parsed[w] === 'mood' ? 'mood' as const : 'food' as const]));
+    } catch {
+      return Object.fromEntries(words.map((w) => [w, 'unknown' as const]));
+    }
   };
 }
