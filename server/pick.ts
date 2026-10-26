@@ -81,6 +81,24 @@ export function parseNote(note: string): { exclusions: string[]; keywords: strin
 
 export interface PickFilter { diet?: string; meal?: string; }
 
+// The single source of truth for "which recipes may be shown under these
+// filters": verified-only, conservative diet rules ('Veg' strict; 'Non-veg'
+// needs an explicit egg/meat classification; unknown diets match NEITHER
+// filter and only appear unfiltered), substring meal match. Every
+// user-facing route (picks AND free-form AI answers) must go through this -
+// never re-implement the rules at a call site.
+export function filterCandidateRecipes(recipes: RecipeRow[], filter?: PickFilter): RecipeRow[] {
+  return recipes.filter((r) => {
+    if (String(r.verified).toLowerCase() !== 'yes') return false;
+    const dc = dietClass(r.diet);
+    if (filter && filter.diet === 'Veg' && dc !== 'veg') return false;
+    if (filter && filter.diet === 'Non-veg' && dc !== 'nonveg') return false;
+    if (filter && filter.diet && filter.diet !== 'Veg' && filter.diet !== 'Non-veg' && r.diet !== filter.diet) return false;
+    if (filter && filter.meal && String(r.meal_type || '').toLowerCase().indexOf(filter.meal.toLowerCase()) === -1) return false;
+    return true;
+  });
+}
+
 export interface PickResult {
   count: number;
   usedAI: boolean;
@@ -129,20 +147,9 @@ export async function pickForMe(
   classifyFn?: ClassifyFn
 ): Promise<PickResult> {
   let blockedByHistory = 0;
-  let candidates = recipes.filter((r) => {
-    if (String(r.verified).toLowerCase() !== 'yes') return false;
+  let candidates = filterCandidateRecipes(recipes, filter).filter((r) => {
     const id = videoIdOf(r.video_url);
     if (excluded[id]) { blockedByHistory++; return false; }
-    // 'Non-veg' means anything not strictly Veg (catches 'Egg', 'Contains egg',
-    // 'Chicken'...); 'Veg' stays strict - egg dishes are not vegetarian here.
-    // 'Veg' is strict; 'Non-veg' means an explicitly confirmed egg/meat
-    // dish. Unknown or unclassified diets are excluded by BOTH filters and
-    // only ever appear in an unfiltered 'Veg + Non-veg' pick.
-    const dc = dietClass(r.diet);
-    if (filter && filter.diet === 'Veg' && dc !== 'veg') return false;
-    if (filter && filter.diet === 'Non-veg' && dc !== 'nonveg') return false;
-    if (filter && filter.diet && filter.diet !== 'Veg' && filter.diet !== 'Non-veg' && r.diet !== filter.diet) return false;
-    if (filter && filter.meal && String(r.meal_type || '').toLowerCase().indexOf(filter.meal.toLowerCase()) === -1) return false;
     return true;
   });
   // One idea per video.
