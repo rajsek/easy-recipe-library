@@ -134,3 +134,27 @@ export function buildClassifyFn(): ClassifyFn | undefined {
     }
   };
 }
+
+// Free-question answering for the app's "Instant AI answer" mode. Same
+// advisory-only contract: it can only talk about the verified recipes it is
+// given, it cannot change picks/filters, and it must refuse medical,
+// nutrition or allergy advice and off-topic questions.
+export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<string>) | undefined {
+  const { chat } = resolveChat();
+  if (!chat) return undefined;
+  return async (recipes, question, filter) => {
+    const list = recipes
+      .filter((r) => String(r.verified).toLowerCase() === 'yes')
+      .slice(0, 60)
+      .map((r) => '- ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
+      .join('\n');
+    const prompt =
+      "You are the assistant inside a personal recipe library app. Answer the cook's question using ONLY the verified recipes below. " +
+      'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
+      'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
+      'Keep the answer under 120 words.\n\nVerified recipes:\n' + list +
+      '\n\nFilters: ' + JSON.stringify(filter || {}) +
+      '\nQuestion: ' + question + '\nAnswer:';
+    return (await chat(prompt)).trim();
+  };
+}
