@@ -56,7 +56,7 @@ const NOTE_STOP = new Set(('the a an and or for with without something anything 
   'friendly style type eat eating have get give show pick ideas idea will would shall should can could ' +
   'may might must just really very also still even ever never any every too yet').split(' '));
 
-function wordRe(term: string): RegExp {
+export function wordRe(term: string): RegExp {
   return new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
 }
 
@@ -80,6 +80,53 @@ export function parseNote(note: string): { exclusions: string[]; keywords: strin
 }
 
 export interface PickFilter { diet?: string; meal?: string; }
+
+// Words that describe the request itself, never an ingredient - excluded
+// from the food-word hard filter in ask mode.
+const ASK_REQUEST_WORDS = new Set(('breakfast lunch dinner snack snacks sweet sweets sunday meal meals ' +
+  'recipe recipes dish dishes food cook cooking make idea ideas quick easy today tonight tomorrow week weekday weekend').split(' '));
+
+// The ask-ai route's hard constraints, mirroring pick rules:
+//  - "no X" / "without X" exclusions are ALWAYS hard
+//  - recently suggested/cooked recipes (30-day no-repeat) stay hidden UNLESS
+//    the question names that dish directly (a direct question must still be
+//    answerable)
+//  - words the classifier explicitly calls FOOD are hard requirements:
+//    matching candidates only, or an honest zero - never an invented answer
+export function constrainAskCandidates(
+  candidates: RecipeRow[],
+  question: string,
+  excluded: Record<string, true>,
+  classification: Record<string, string>
+): { candidates: RecipeRow[]; zeroReason?: string } {
+  const parsed = parseNote(question);
+  let out = candidates;
+  if (parsed.exclusions.length > 0) {
+    out = out.filter((r) => {
+      const hay = r.recipe_name + ' ' + (r.ingredients || '');
+      return !parsed.exclusions.some((x) => wordRe(x).test(hay));
+    });
+  }
+  const q = question.toLowerCase();
+  out = out.filter((r) => {
+    const id = videoIdOf(r.video_url);
+    if (!excluded[id]) return true;
+    const short = r.recipe_name.split('(')[0].trim().toLowerCase();
+    return short.length >= 4 && q.indexOf(short) !== -1;
+  });
+  const foodWords = parsed.keywords.filter((k) => classification[k] === 'food' && !ASK_REQUEST_WORDS.has(k));
+  if (foodWords.length > 0) {
+    const matched = out.filter((r) => {
+      const hay = r.recipe_name + ' ' + (r.ingredients || '');
+      return foodWords.some((k) => wordRe(k).test(hay));
+    });
+    if (matched.length === 0) {
+      return { candidates: [], zeroReason: 'no verified recipe in the library matches ' + foodWords.map((k) => '"' + k + '"').join(', ') + ' under these filters - nothing invented to fill the gap' };
+    }
+    out = matched;
+  }
+  return { candidates: out };
+}
 
 // The single source of truth for "which recipes may be shown under these
 // filters": verified-only, conservative diet rules ('Veg' strict; 'Non-veg'
