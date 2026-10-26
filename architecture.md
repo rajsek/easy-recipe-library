@@ -41,14 +41,15 @@ flowchart LR
 | ID | Component | Role | State |
 | --- | --- | --- | --- |
 | web-ui | React app (Vite build) | Filters, picks, ask, history, comms | Live |
-| guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Always run BEFORE any model; no model can widen the pool | Live |
+| guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool | Live |
 | session-store | In-memory ask sessions (server/session.ts) | 30-min TTL; follow-ups like "another option" reuse stored diet/meal and hide what was just shown; reset via "New conversation" | Live (resets on restart) |
 | semantic-cache | Answer reuse (server/semantic.ts) | A repeat question with the SAME constraints + library + intent is answered with 0 AI calls; "another option" and any constraint change bypass it | Live |
-| rag-retrieval | Full-corpus retrieval (server/rag.ts) | Top video-index matches join the shortlist, labelled "video found - details not extracted yet"; details are never invented | Committed; live verification pending (index bundling fix dd59c44 awaiting deploy) |
+| rag-retrieval | Full-corpus retrieval (server/rag.ts) | Top video-index matches join the shortlist, labelled "video found - details not extracted yet"; details are never invented | Live (verified 2026-10-26 19:47 IST: production /api/state rag.ready=true with 4468 titles; a paneer ask returned 3 checked cards + 2 labelled video suggestions) |
 | minilm-matcher | Local matching model (Xenova/all-MiniLM-L6-v2, pinned revision, Apache-2.0) | Turns question + titles into number patterns for meaning matching and the answer cache. Runs inside the app server; question/recipe text never leaves for matching. Pluggable: `SEMANTIC=off` disables it and the app falls back to plain word rules, honestly labelled | Live, optional |
 | groq-answerer | Groq chat API (openai/gpt-oss-120b) | Writes the answer from the shortlist only; cited recipes are validated server-side, one corrective retry then honest reject | Live |
-| snapshot-data | server/demo-data.json | Dated public video-derived copy of the library; private history never published | Live, owner-refreshed |
-| embeddings-index | server/demo-embeddings.json | Precomputed MiniLM vectors (int8) for all 4468 video titles; regenerated with each snapshot refresh | Committed; bundling fix pending deploy (dd59c44) |
+| snapshot-data | server/demo-data.json | Dated public video-derived copy of the library (62 cards = 61 verified + 1 partial, 4468-video index as of 2026-10-26); private history never published | Live, owner-refreshed |
+| ingredient-typeahead | server/pick.ts typeaheadVocab + /api/ingredients + chips UI | Canonical ingredient words from the checked library (curated 141-word allowlist); tap/keyboard multi-select composed into ask + pick notes; zero AI per keystroke | Committed; live verification pending deploy |
+| embeddings-index | server/demo-embeddings.json | Precomputed MiniLM vectors (int8) for all 4468 video titles; regenerated with each snapshot refresh | Live (bundling fixed by literal-__dirname tracing in 69315b9; verified with rag-retrieval) |
 | live-sheet | Private Google Sheet | Source of truth for recipes, history, traces | Planned (needs account connection) |
 | doc-bridge | Shared Google Doc | Chat bridge to the assistant | Disabled (notification unproven) |
 | passkey-login | Fingerprint login | Optional sign-in addition | Not built |
@@ -103,6 +104,10 @@ Newest first. SHAs are real commits on main.
 
 | Date (IST) | Commit(s) | What changed |
 | --- | --- | --- |
+| 2026-10-26 19:57 | 7c091b5 | snapshot-data: 62 cards (61 verified + 1 partial), +2 paneer cards, 7 paneer video extraction statuses |
+| 2026-10-26 19:56 | f81abc3, 4fb5f27, e076c65, 1707524 | guardrails: food words combine as AND; question words never interpreted as ingredients ("what" is not "wheat"); zero answers name the real cause with counts; honest-zero asks also offer labelled video alternatives |
+| 2026-10-26 19:47 | 69315b9, 357baa5 | rag-retrieval + embeddings-index live-verified (production deployment of 112bc52; rag.ready=true, 4468 titles) |
+| 2026-10-26 19:38 | 112bc52, 7f47c8c, d4c9f1f, 89f02fa, c217c54, bfb12c3, f7b2df8, df4eadf | ingredient-typeahead added: vocab endpoint, curated allowlist, multi-select chips; zero AI per keystroke |
 | 2026-10-26 18:41 | dd59c44 | vercel.json: JSON snapshots explicitly included in the serverless bundle |
 | 2026-10-26 18:34 | 73f1710 | architecture.md added (this file) |
 | 2026-10-26 18:33 | 7f67f04 | embeddings-index added (4468 video-title vectors, int8) |
