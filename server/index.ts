@@ -76,7 +76,7 @@ app.post('/api/history', async (req, res) => {
     if (!/^[\w-]{1,20}$/.test(String(video_id || ''))) throw new Error('bad video_id');
     if (String(title || '').length > 200) throw new Error('title too long');
     if (mode === 'demo') {
-      if (!['saved-for-later', 'chosen', 'cooked'].includes(state)) throw new Error('bad state');
+      if (!['saved-for-later', 'chosen', 'cooked', 'favourite'].includes(state)) throw new Error('bad state');
       const date = new Date().toISOString().slice(0, 10);
       demoMemory.history.push({ date, id: video_id, title, state });
       res.json({ ok: true, date });
