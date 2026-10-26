@@ -334,7 +334,7 @@ test('ask route zero: coverage + interpretation in the reason', async () => {
   assert.equal(candidates.length, 0);
   assert.deepEqual(interpreted, [{ from: 'panner', to: 'paneer' }]);
   assert.ok(/0 list "paneer"/.test(zeroReason || ''), zeroReason);
-  assert.ok(/library gap/.test(zeroReason || ''), zeroReason);
+  assert.ok(/gap in the checked library/.test(zeroReason || ''), zeroReason);
 });
 
 test('dietClass: "Veg (needs eggless mayo dip)" is veg-conditional - excluded from BOTH Veg and Non-veg picks', async () => {
@@ -358,4 +358,24 @@ test('ask constraints: diet vocabulary in a question is a request word, never an
   const { candidates: out, zeroReason } = constrainAskCandidates(candidates, 'quick veg snack idea?', { titles: {}, videoOnly: {} }, { quick: 'mood' });
   assert.equal(zeroReason, undefined, 'the word veg must not zero the pool');
   assert.equal(out.length, 1);
+});
+
+test('ask constraints: a library ingredient stays a hard filter even with NO classifier result', () => {
+  const paneer = [
+    { recipe_name: 'Paneer Butter Masala', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD1', diet: 'Veg', meal_type: 'lunch/dinner', ingredients: 'paneer, butter, tomato', verified: 'yes' },
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD2', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal', verified: 'yes' },
+  ] as any;
+  const snackPool = paneer.filter((r) => r.meal_type === 'snack');
+  // Classifier returned NOTHING (provider failure): paneer must still hard-filter.
+  const { zeroReason } = constrainAskCandidates(snackPool, 'paneer snacks?', { titles: {}, videoOnly: {} }, {}, undefined, paneer);
+  assert.match(String(zeroReason), /current filters/, 'qualified absence: none under these filters');
+  assert.match(String(zeroReason), /Paneer Butter Masala/, 'names the out-of-filter recipes the library does have');
+});
+
+test('ask constraints: library-wide absence stays an honest gap, never a recipe claim', () => {
+  const pool = [
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=EEEEEEEEEE1', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal', verified: 'yes' },
+  ] as any;
+  const { zeroReason } = constrainAskCandidates(pool, 'quinoa salad?', { titles: {}, videoOnly: {} }, { quinoa: 'food' }, undefined, pool); // classifier identifies the unknown word as food; library lists none
+  assert.match(String(zeroReason), /not proof the dish does not exist/);
 });
