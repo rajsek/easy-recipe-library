@@ -510,6 +510,32 @@ const TYPEAHEAD_STOP = new Set(('about added adds add after again against ahead 
   'needed needs note optional other others over piece pieces prefer preference required roughly serve serves serving ' +
   'aside baking base small soak soaked soft soften store stored taste thick thin tightly together total usually very water well whole your').split(' '));
 
+/** Curated single-word ingredient allowlist: a chip is offered only when the
+ * word both appears in verified ingredient text AND is a known food word.
+ * Deterministic; unknown library words stay reachable as free text. */
+const INGREDIENT_ALLOWLIST = new Set((
+  'paneer tofu chicken mutton prawn prawns fish salmon egg eggs bacon ham mushroom mushrooms ' +
+  'potato potatoes onion onions tomato tomatoes garlic ginger capsicum carrot carrots beans broccoli cauliflower cabbage ' +
+  'spinach methi coriander mint curry cucumber cucumbers beetroot radish pumpkin squash zucchini eggplant brinjal okra ' +
+  'ladysfinger drumstick peas corn avocado arugula lettuce kale celery leeks pineapple banana bananas apple mango papaya ' +
+  'grapes pomegranate orange sweetlime watermelon muskmelon strawberry blueberries dryfruits ' +
+  'rice basmati seeraga samba poha aval rava sooji semolina oats quinoa millets ragi bajra jowar wheat atta maida besan ' +
+  'cornflour cornstarch riceflour barley sago sabudana vermicelli seviyan noodles pasta spaghetti macaroni bread bun pav ' +
+  'tortilla wraps poha puffedrice cornflakes muesli ' +
+  'urad chana moong toor masoor rajma chole chickpeas lobia cowpea horsegram sprouts soya soychunks ' +
+  'milk curd curds yogurt butter ghee cream buttermilk cheese mozzarella paneer khoya mawa malai condensed evaporated ' +
+  'sugar jaggery honey syrup jaggerypowder brown sugar salt rocksalt blacksalt ' +
+  'turmeric chilli chillies pepper peppercorns cumin jeera corianderseeds dhaniya mustard fenugreek ajwain hing asafoetida ' +
+  'cardamom elaichi cloves cinnamon bayleaf staranise mace javitri nutmeg saffron kewra vanilla rosewater ' +
+  'amchur tamarind kokum vinegar pickles ' +
+  'groundnut groundnuts peanut peanuts cashew cashews almond almonds walnut walnuts pistachio pista raisins sultanas dates figs ' +
+  'sesame gingelly poppyseeds khus coconut copra ' +
+  'oil ghee butter vanaspati margarine ' +
+  'seeds herbs dill parsley basil oregano rosemary thyme lemongrass springonion scallions ' +
+  'ketchup mayonnaise mayo soysauce sriracha tabasco mustard paste puree jams ' +
+  'chocolate cocoa coffee tea badam pisin China grass agar agaragar gelatin cornflour custardpowder bakingpowder bakingsoda yeast ' +
+  'kesar melonseeds charmagaz lotusseeds makhana phool makhana').split(' ').filter((w) => w.length >= 3));
+
 /** Canonical multi-word ingredient phrases recognised when they appear in the
  * verified library's ingredient text. Used for the typeahead vocabulary so
  * chips can offer "garam masala", not just "garam". Extend deliberately. */
@@ -541,7 +567,7 @@ export function typeaheadVocab(recipes: RecipeRow[]): string[] {
   for (const p of new Set(INGREDIENT_PHRASES)) {
     if (count(p) > 0) phrases.add(p);
   }
-  const singles = new Set(ingredientVocab(recipes).filter((w) => !TYPEAHEAD_STOP.has(w)));
+  const singles = new Set(ingredientVocab(recipes).filter((w) => !TYPEAHEAD_STOP.has(w) && INGREDIENT_ALLOWLIST.has(w)));
   for (const ph of phrases) {
     for (const part of ph.split(' ')) {
       if (!singles.has(part)) continue;
