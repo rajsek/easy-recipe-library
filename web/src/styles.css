@@ -22,9 +22,9 @@ h1,h2,h3,.pill { font-family:ui-rounded,'SF Pro Rounded',system-ui,sans-serif; }
 
 /* Header */
 .topbar { background:var(--leaf-deep); color:#f4f1e8; }
-.topbar .wrap { display:flex; align-items:center; justify-content:space-between; gap:10px; padding-top:15px; padding-bottom:15px; }
-.topbar h1 { font-size:19px; margin:0; font-weight:700; letter-spacing:.2px; }
-.modebadge { font-size:11px; font-weight:600; border-radius:999px; padding:3px 10px; white-space:nowrap; }
+.topbar .wrap { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px 10px; padding-top:13px; padding-bottom:13px; }
+.topbar h1 { font-size:18px; margin:0; font-weight:700; letter-spacing:.2px; }
+.modebadge { font-size:11px; font-weight:600; border-radius:999px; padding:3px 10px; max-width:100%; white-space:normal; }
 .modebadge.demo { background:rgba(244,241,232,.14); color:#ffe9c9; border:1px solid rgba(244,241,232,.35); }
 .modebadge.live { background:#e7f4e9; color:var(--leaf-deep); }
 
