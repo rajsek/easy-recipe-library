@@ -18,7 +18,7 @@ import {
   addQueueRequest, getQueueRequest
 } from './data.js';
 import { pickForMe, excludedIds } from './pick.js';
-import { buildRankFn } from './ai.js';
+import { buildRankFn, buildClassifyFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -92,6 +92,7 @@ app.post('/api/history', async (req, res) => {
 
 // AI ranking - only when the owner opted in via env (see README privacy note).
 const { rankFn, provider: aiProvider } = buildRankFn();
+const classifyFn = buildClassifyFn();
 
 app.post('/api/pick', async (req, res) => {
   const diet = String(req.body?.diet || '');
@@ -105,7 +106,7 @@ app.post('/api/pick', async (req, res) => {
     mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
     mode === 'demo' ? [...picks, ...demoPicks] : picks
   );
-  const result = await pickForMe(filter, note, recipes as any, ex, rankFn);
+  const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn);
   await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
   res.json(result);
 });
