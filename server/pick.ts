@@ -189,7 +189,8 @@ export function constrainAskCandidates(
   question: string,
   excluded: AskExclusions,
   classification: Record<string, string>,
-  vocab?: string[]
+  vocab?: string[],
+  allVerified?: RecipeRow[]
 ): { candidates: RecipeRow[]; zeroReason?: string; interpreted: NoteInterpretation[] } {
   const parsed = parseNote(question);
   const v = vocab || noteVocab(candidates);
@@ -215,10 +216,16 @@ export function constrainAskCandidates(
       return ts.length >= 4 && (ts === short || short.startsWith(ts) || ts.startsWith(short));
     });
   });
-  // A word normalized to a library ingredient IS an ingredient constraint
-  // even if the classifier could not place the original typo.
+  // A library word is an ingredient constraint UNLESS the classifier
+  // deliberately called it a mood: a classifier FAILURE (empty/unknown)
+  // can never silently drop the hard filter, but an explicit 'mood' still
+  // demotes dish-type words ("which chutney recipes do I have?").
+  // Membership is checked against the WIDE library vocabulary, not the
+  // already-filtered pool - "paneer" is paneer even when the snack pool
+  // has none.
+  const wideV = allVerified && allVerified.length ? noteVocab(allVerified) : v;
   const foodWords = kwN.pairs
-    .filter((p) => (classification[p.orig] === 'food' || p.interpreted) && !ASK_REQUEST_WORDS.has(p.word))
+    .filter((p) => (classification[p.orig] === 'food' || p.interpreted || (wideV.includes(p.word) && classification[p.orig] !== 'mood')) && !ASK_REQUEST_WORDS.has(p.word))
     .map((p) => p.word);
   if (foodWords.length > 0) {
     const matched = out.filter((r) => {
@@ -226,13 +233,24 @@ export function constrainAskCandidates(
       return foodWords.some((k) => wordRe(k).test(hay));
     });
     if (matched.length === 0) {
-      return {
-        candidates: [],
-        interpreted,
-        zeroReason: 'No verified recipe matches everything - ' + coverageNote('library', foodWords, out) +
+      // Coverage must be qualified: "none under these filters" is NOT "none
+      // in the library". When the wider verified library DOES list the food,
+      // say so and name the way through (loosen the filters).
+      let reason: string;
+      const wider = (allVerified && allVerified.length > out.length)
+        ? allVerified.filter((r) => foodWords.some((k) => wordRe(k).test(r.recipe_name + ' ' + (r.ingredients || ''))))
+        : [];
+      if (wider.length > 0) {
+        reason = 'No verified recipe lists ' + foodWords.map((k) => '"' + k + '"').join(' or ') +
+          ' under your current filters - but the checked library has ' + wider.length +
+          ' outside them (' + wider.slice(0, 3).map((r) => r.recipe_name).join('; ') +
+          (wider.length > 3 ? '; ...' : '') + '). Loosen a filter to see them. Nothing invented to fill the gap.';
+      } else {
+        reason = 'No verified recipe matches everything - ' + coverageNote('library', foodWords, allVerified && allVerified.length ? allVerified : out) +
           (interpreted.length > 0 ? '; interpreted ' + interpreted.map((i) => '"' + i.from + '" as "' + i.to + '"').join(', ') : '') +
-          '. Nothing invented to fill the gap - a library gap, not proof the dish does not exist.',
-      };
+          '. Nothing invented to fill the gap - a gap in the checked library, not proof the dish does not exist.';
+      }
+      return { candidates: [], interpreted, zeroReason: reason };
     }
     out = matched;
   }
