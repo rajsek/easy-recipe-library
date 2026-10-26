@@ -2,11 +2,11 @@
  * Easy Recipe Library - API server.
  * Serves the built web app (web/dist) and a small JSON API.
  *
- * AI ranking: OFF unless BOTH AI_PROVIDER=gemini and GEMINI_API_KEY are set in
- * .env. Until then picks are deterministic and clearly labeled, and no request
- * note text leaves this server. The Gemini call below is the single place
- * where request data can reach a provider, and it sends only the candidate
- * list (public recipe data) plus this request's filters/note.
+ * AI ranking: OFF unless AI_PROVIDER plus that provider's key env vars are
+ * set (.env locally). Until then picks are deterministic and clearly labeled,
+ * and no request note text leaves this server. The provider call in ai.ts is
+ * the single place request data can reach a provider, and it sends only the
+ * candidate list (public recipe data) plus this request's filters/note.
  */
 import 'dotenv/config';
 import express from 'express';
@@ -16,7 +16,8 @@ import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode
 } from './data.js';
-import { pickForMe, excludedIds, type RankFn } from './pick.js';
+import { pickForMe, excludedIds } from './pick.js';
+import { buildRankFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -52,7 +53,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/state', (_req, res) => res.json({ mode, ai: !!rankFn }));
+app.get('/api/state', (_req, res) => res.json({ mode, ai: !!rankFn, aiProvider }));
 
 app.get('/api/channels', async (_req, res) => res.json(await getChannels()));
 
@@ -88,39 +89,8 @@ app.post('/api/history', async (req, res) => {
   }
 });
 
-// Gemini ranking - only when the owner opted in via .env (see README privacy note).
-const rankFn: RankFn | undefined =
-  process.env.AI_PROVIDER === 'gemini' && process.env.GEMINI_API_KEY
-    ? async (candidates, filter, note) => {
-        const list = candidates
-          .map((r, i) => `${i}: ${r.recipe_name} (${r.diet}, ${r.meal_type}, ${r.time_notes})`)
-          .join('\n');
-        const prompt =
-          'You are picking recipes for a home cook. Candidate recipes:\n' + list +
-          '\n\nFilters: ' + JSON.stringify(filter || {}) +
-          '\nRequest note: ' + (note || 'none') +
-          '\n\nPick up to 5 candidate numbers that best fit, best first. ' +
-          'Reply with JSON only: [{"i":<number>,"reason":"<one short sentence>"}]. No other text.';
-        const resp = await fetch(
-          'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' +
-            process.env.GEMINI_API_KEY,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-          }
-        );
-        if (!resp.ok) throw new Error('gemini ' + resp.status);
-        const data: any = await resp.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
-        const order: number[] = []; const reasons: Record<number, string> = {};
-        for (const item of Array.isArray(parsed) ? parsed : []) {
-          if (Number.isInteger(item.i)) { order.push(item.i); reasons[item.i] = String(item.reason || ''); }
-        }
-        return { order, reasons };
-      }
-    : undefined;
+// AI ranking - only when the owner opted in via env (see README privacy note).
+const { rankFn, provider: aiProvider } = buildRankFn();
 
 app.post('/api/pick', async (req, res) => {
   const diet = String(req.body?.diet || '');
@@ -154,6 +124,6 @@ const isDirectRun = process.argv[1] ? import.meta.url === pathToFileURL(process.
 if (isDirectRun) {
   const port = Number(process.env.PORT || 3000);
   app.listen(port, HOST, () => {
-    console.log(`Easy Recipe Library (${mode} mode, AI ${rankFn ? 'ON' : 'off'}, auth ${APP_TOKEN ? 'ON' : 'off'}) -> http://${HOST}:${port}`);
+    console.log(`Easy Recipe Library (${mode} mode, AI ${rankFn ? 'ON:' + aiProvider : 'off'}, auth ${APP_TOKEN ? 'ON' : 'off'}) -> http://${HOST}:${port}`);
   });
 }
