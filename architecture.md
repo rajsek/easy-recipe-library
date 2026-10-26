@@ -11,7 +11,7 @@ deployment of commit 64088bb: 62 cards (61 verified + 1 partial) + 4468-video in
 AND note semantics, staged zero-reasons, and the multi-chip typeahead UI (64088bb is
 the useRef hotfix that restored the page after the blank-screen incident; the npm
 build now runs tsc --noEmit before vite). The repo main is newer (chips-only Ask
-button fix) and AWAITS its build; "State" below says Live only for what production
+button fix, pick-route video alternatives) and AWAITS its build; "State" below says Live only for what production
 actually serves. Saves/history are per-instance memory and reset on restart.
 
 ## Request flow (diagram)
@@ -108,6 +108,7 @@ Newest first. SHAs are real commits on main.
 
 | Date (IST) | Commit(s) | What changed |
 | --- | --- | --- |
+| 2026-10-26 20:35 | 365bf8b, 837bc57, 6cbfece | web-ui + api: pick fills a thin checked pool (<5) with labelled full-corpus video alternatives (not counted, not recorded, diet-hint filtered, unique ids); WhatsApp ask route includes selected chips; regression test 89 |
 | 2026-10-26 20:23 | 3208a7f | web-ui: selected ingredient chips alone enable the Ask button (chips-only ask); committed, awaiting deploy |
 | 2026-10-26 20:19 | e06f312 | build: npm run build runs tsc --noEmit -p web before vite so a missing import fails the build instead of shipping a blank page; committed, awaiting deploy |
 | 2026-10-26 20:19 | 64088bb | web-ui hotfix: import useRef (blank-screen ReferenceError); deployed and live-verified (renders, 62 cards, AND pick, zero-reason, console clean, mobile) |
