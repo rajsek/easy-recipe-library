@@ -56,7 +56,15 @@ async function chatGroq(prompt: string) {
   });
   if (!resp.ok) throw new Error('groq ' + resp.status);
   const data: any = await resp.json();
-  return String(data?.choices?.[0]?.message?.content || '');
+  return {
+    text: String(data?.choices?.[0]?.message?.content || ''),
+    meta: {
+      provider: 'groq', model: String(data?.model || process.env.GROQ_MODEL || ''), request_id: String(data?.id || ''),
+      prompt_tokens: Number(data?.usage?.prompt_tokens || 0),
+      completion_tokens: Number(data?.usage?.completion_tokens || 0),
+      total_tokens: Number(data?.usage?.total_tokens || 0),
+    },
+  };
 }
 
 async function chatCloudflare(prompt: string) {
@@ -70,7 +78,7 @@ async function chatCloudflare(prompt: string) {
   });
   if (!resp.ok) throw new Error('cloudflare ' + resp.status);
   const data: any = await resp.json();
-  return String(data?.result?.response || '');
+  return { text: String(data?.result?.response || ''), meta: { provider: 'cloudflare', model: model, request_id: '', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } };
 }
 
 async function chatGemini(prompt: string) {
@@ -86,10 +94,16 @@ async function chatGemini(prompt: string) {
   );
   if (!resp.ok) throw new Error('gemini ' + resp.status);
   const data: any = await resp.json();
-  return String(data?.candidates?.[0]?.content?.parts?.[0]?.text || '');
+  const u = data?.usageMetadata || {};
+  return {
+    text: String(data?.candidates?.[0]?.content?.parts?.[0]?.text || ''),
+    meta: { provider: 'gemini', model: model, request_id: '', prompt_tokens: Number(u.promptTokenCount || 0), completion_tokens: Number(u.candidatesTokenCount || 0), total_tokens: Number(u.totalTokenCount || 0) },
+  };
 }
 
-type ChatFn = (prompt: string) => Promise<string>;
+export interface AiCallMeta { provider: string; model: string; request_id: string; prompt_tokens: number; completion_tokens: number; total_tokens: number; }
+export interface AiUsageSink { calls: AiCallMeta[]; }
+type ChatFn = (prompt: string) => Promise<{ text: string; meta: AiCallMeta }>;
 
 function resolveChat(): { chat?: ChatFn; provider: string } {
   const p = String(process.env.AI_PROVIDER || '').toLowerCase();
@@ -100,19 +114,23 @@ function resolveChat(): { chat?: ChatFn; provider: string } {
   return { chat, provider: chat ? p : '' };
 }
 
-export function buildRankFn(): { rankFn?: RankFn; provider: string } {
+export function buildRankFn(rankSink?: AiUsageSink): { rankFn?: RankFn; provider: string } {
   const { chat, provider } = resolveChat();
   if (!chat) return { provider: '' };
   return {
     provider,
-    rankFn: async (candidates, filter, note) => parseAnswer(await chat(buildPrompt(candidates, filter, note)))
+    rankFn: async (candidates, filter, note) => {
+      const r = await chat(buildPrompt(candidates, filter, note));
+      rankSink?.calls.push(r.meta);
+      return parseAnswer(r.text);
+    }
   };
 }
 
 // Classifies unmatched note words so the picker can tell a missing
 // ingredient (hard requirement) from a mood (soft preference). Conservative
 // by contract: anything not clearly a mood comes back as food/unknown.
-export function buildClassifyFn(): ClassifyFn | undefined {
+export function buildClassifyFn(sink?: AiUsageSink): ClassifyFn | undefined {
   const { chat } = resolveChat();
   if (!chat) return undefined;
   return async (words: string[]) => {
@@ -124,7 +142,9 @@ export function buildClassifyFn(): ClassifyFn | undefined {
       'Obvious misspellings of an ingredient are still food ("panner", "panir" = paneer).\n' +
       'Words: ' + words.join(', ') + '\n' +
       'Reply with ONLY a JSON object mapping each word to "food" or "mood".';
-    const out = await chat(prompt);
+    const r = await chat(prompt);
+    sink?.calls.push(r.meta);
+    const out = r.text;
     const m2 = out.match(/\{[\s\S]*\}/);
     if (!m2) return Object.fromEntries(words.map((w) => [w, 'unknown' as const]));
     try {
@@ -146,7 +166,7 @@ export function buildClassifyFn(): ClassifyFn | undefined {
 // Provider failures (including free-quota exhaustion) surface as honest
 // errors; there is no paid fallback anywhere.
 
-export type ChatOnly = (prompt: string) => Promise<string>;
+export type ChatOnly = (prompt: string) => Promise<{ text: string; meta: AiCallMeta }>;
 
 // Recipe references the answer makes: [[explicit markers]] plus **bolded**
 // spans, which is how the models habitually write dish names. Both are
@@ -162,7 +182,8 @@ export async function askWithValidation(
   chat: ChatOnly,
   recipes: RecipeRow[],
   question: string,
-  filter: PickFilter
+  filter: PickFilter,
+  sink?: AiUsageSink
 ): Promise<AskAnswer> {
   const list = recipes
     .slice(0, 60)
@@ -177,6 +198,7 @@ export async function askWithValidation(
     'The cook may make typos: read an obvious spelling variant as the ingredient it means ("panner" = "paneer") and say so in "text" ("taking panner as paneer"). ' +
     'If a typo could mean two different ingredients, ask which one instead of guessing. ' +
     'Hard constraints are never relaxed: only the recipes listed below may be cited, whatever the question asks for. ' +
+    'A recipe marked "Veg (needs ...)" is only conditionally vegetarian: when you cite one, state its condition (for example, that the dip needs eggless mayo) - never present it as plain veg. ' +
     'Keep "text" under 120 words.\n\nVerified recipes:\n' + list +
     '\n\nFilters: ' + JSON.stringify(filter || {}) +
     '\nQuestion: ' + question + '\nJSON:';
@@ -190,13 +212,17 @@ export async function askWithValidation(
     } catch { return undefined; }
   };
   const badIds = (ids: number[]) => ids.filter((i) => i < 1 || i > recipes.length);
-  let parsed = parse(await chat(prompt));
+  const r1 = await chat(prompt);
+  sink?.calls.push(r1.meta);
+  let parsed = parse(r1.text);
   let bad = parsed ? badIds(parsed.ids) : [];
   if (!parsed || bad.length > 0) {
-    parsed = parse(await chat(
+    const r2 = await chat(
       prompt +
       '\n\nYour previous reply was invalid. Reply with strict JSON only: {"text": string, "ids": number[]} using list numbers 1-' + recipes.length + ' only.'
-    ));
+    );
+    sink?.calls.push(r2.meta);
+    parsed = parse(r2.text);
     bad = parsed ? badIds(parsed.ids) : [];
     if (!parsed || bad.length > 0) {
       console.warn('ask-ai rejected answer: invalid structured reference count:', parsed ? bad.length : -1);
@@ -210,8 +236,8 @@ export async function askWithValidation(
   return { text, recipes: cited };
 }
 
-export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<AskAnswer>) | undefined {
+export function buildAskFn(sink?: AiUsageSink): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<AskAnswer>) | undefined {
   const { chat } = resolveChat();
   if (!chat) return undefined;
-  return (recipes, question, filter) => askWithValidation(chat, recipes, question, filter);
+  return (recipes, question, filter) => askWithValidation(chat, recipes, question, filter, sink);
 }
