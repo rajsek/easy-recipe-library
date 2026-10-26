@@ -4,7 +4,7 @@ This file describes how the app is put together. It is updated in the same
 commit as any architecture change, keeping section headings and diagram node
 IDs stable so `git diff` shows exactly what each change touched.
 
-## Current state (as of 2026-10-26, commit 7f67f04)
+## Current state (as of 2026-10-26, commit 7c091b5)
 
 Live on Vercel (Hobby, free tier), demo-snapshot mode: the app serves a dated
 copy of the recipe library (57 verified + 1 partial recipe cards, 4468-video
