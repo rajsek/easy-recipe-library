@@ -151,13 +151,36 @@ function markerRefs(text: string): string[] {
   return [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1].trim());
 }
 
+// Acceptable reference forms per recipe: the full name and, for names like
+// "Ven Pongal (Chef Damu style, ...)", the part before the first parenthesis
+// - exact full-name reproduction is too brittle for long descriptive names.
+// A prefix shared by two recipes is ambiguous and accepted for NEITHER.
+export function referenceAliases(recipes: RecipeRow[]): Map<string, string> {
+  const alias = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  for (const r of recipes) {
+    const full = r.recipe_name.trim();
+    const forms = [full];
+    const paren = full.indexOf('(');
+    if (paren > 0) forms.push(full.slice(0, paren).trim());
+    for (const f of forms) {
+      const key = f.toLowerCase();
+      if (!key) continue;
+      if (alias.has(key) && alias.get(key) !== full) { ambiguous.add(key); continue; }
+      alias.set(key, full);
+    }
+  }
+  for (const k of ambiguous) alias.delete(k);
+  return alias;
+}
+
 export async function askWithValidation(
   chat: ChatOnly,
   recipes: RecipeRow[],
   question: string,
   filter: PickFilter
 ): Promise<string> {
-  const names = new Set(recipes.map((r) => r.recipe_name));
+  const aliases = referenceAliases(recipes);
   const list = recipes
     .slice(0, 60)
     .map((r) => '- ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
@@ -171,17 +194,21 @@ export async function askWithValidation(
     '\n\nFilters: ' + JSON.stringify(filter || {}) +
     '\nQuestion: ' + question + '\nAnswer:';
   let out = await chat(prompt);
-  let bad = markerRefs(out).filter((r) => !names.has(r));
+  let bad = markerRefs(out).filter((r) => !aliases.has(r.toLowerCase()));
   if (bad.length > 0) {
     out = await chat(
       prompt +
       '\n\nYour previous answer referenced recipes that are NOT in the library: ' + bad.join(', ') +
       '. Answer again: use [[exact names]] from the list only, or no recipe references at all.'
     );
-    bad = markerRefs(out).filter((r) => !names.has(r));
-    if (bad.length > 0) throw new Error('AI answer referenced recipes outside the library');
+    bad = markerRefs(out).filter((r) => !aliases.has(r.toLowerCase()));
+    if (bad.length > 0) {
+      console.warn('ask-ai rejected answer: non-library recipe references:', bad.join(', '));
+      throw new Error('AI answer referenced recipes outside the library');
+    }
   }
-  return out.replace(/\[\[|\]\]/g, '').trim();
+  // Strip markers, normalizing accepted aliases to the canonical full name.
+  return out.replace(/\[\[([^\]]+)\]\]/g, (_m, ref) => aliases.get(String(ref).trim().toLowerCase()) || String(ref)).trim();
 }
 
 export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<string>) | undefined {
