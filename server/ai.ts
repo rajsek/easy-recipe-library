@@ -198,6 +198,7 @@ export async function askWithValidation(
     'The cook may make typos: read an obvious spelling variant as the ingredient it means ("panner" = "paneer") and say so in "text" ("taking panner as paneer"). ' +
     'If a typo could mean two different ingredients, ask which one instead of guessing. ' +
     'Hard constraints are never relaxed: only the recipes listed below may be cited, whatever the question asks for. ' +
+    'The list below may be a FILTERED subset of the library: never claim the library as a whole lacks a dish or ingredient - say "none of these filtered recipes" and suggest loosening the filters instead. ' +
     'A recipe marked "Veg (needs ...)" is only conditionally vegetarian: when you cite one, state its condition (for example, that the dip needs eggless mayo) - never present it as plain veg. ' +
     'Keep "text" under 120 words.\n\nVerified recipes:\n' + list +
     '\n\nFilters: ' + JSON.stringify(filter || {}) +
