@@ -30,8 +30,10 @@ h1,h2,h3,.pill { font-family:ui-rounded,'SF Pro Rounded',system-ui,sans-serif; }
 
 /* Sticky tab pills */
 .tabs { position:sticky; top:0; z-index:5; background:var(--paper); border-bottom:1px solid var(--line); }
-.tabrow { display:flex; gap:6px; overflow-x:auto; padding-top:10px; padding-bottom:10px; scrollbar-width:none; }
-.tabrow::-webkit-scrollbar { display:none; }
+/* 390px overflow: tabs scroll sideways - keep a thin visible scrollbar as the affordance */
+.tabrow { display:flex; gap:6px; overflow-x:auto; padding-top:10px; padding-bottom:10px; scrollbar-width:thin; scroll-padding:12px; }
+.tabrow::-webkit-scrollbar { height:4px; }
+.tabrow::-webkit-scrollbar-thumb { background:var(--line); border-radius:2px; }
 .pill { flex:none; border:1px solid var(--line); background:var(--card); border-radius:999px; padding:6px 14px; font-size:13px; cursor:pointer; color:var(--ink); }
 .pill.on { background:var(--leaf); color:#fff; border-color:var(--leaf); font-weight:600; }
 
