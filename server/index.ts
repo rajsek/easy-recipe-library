@@ -220,7 +220,7 @@ app.post('/api/ask-ai', async (req, res) => {
     if (classifyFn && keywords.length > 0) {
       try { cls = await classifyFn(keywords); } catch { cls = {}; }
     }
-    const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, vocab);
+    const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, vocab, filterCandidateRecipes(recipes as any, {}));
     if (zeroReason) {
       await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer', handling: 'no candidates; no model call', status: 'ok' });
       return res.json({ answer: zeroReason, request_id: traceId, interpreted, session: sessionEcho });
