@@ -53,3 +53,21 @@ test('ask under Veg filter: the model only ever receives veg candidates', async 
   await askWithValidation(chat, candidates, 'any snack?', { diet: 'Veg' });
   assert.equal(sawEgg, false, 'egg dish must not even reach the prompt under Veg');
 });
+
+test('long descriptive names: [[Ven Pongal]] matches \"Ven Pongal (Chef Damu style, ...)\" and normalizes', async () => {
+  const longRows = [
+    { recipe_name: 'Ven Pongal (Chef Damu style, with ulutham paruppu thogayal side)', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAA5', diet: 'Veg', meal_type: 'breakfast', ingredients: 'rice, dal', verified: 'yes' },
+  ] as any;
+  const chat = async () => 'For breakfast try [[Ven Pongal]].';
+  const out = await askWithValidation(chat, longRows, 'breakfast?', { diet: 'Veg' });
+  assert.equal(out, 'For breakfast try Ven Pongal (Chef Damu style, with ulutham paruppu thogayal side).');
+});
+
+test('ambiguous prefix shared by two recipes is accepted for NEITHER', async () => {
+  const twoRows = [
+    { recipe_name: 'Tomato Rice (Hema style)', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAA6', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice', verified: 'yes' },
+    { recipe_name: 'Tomato Rice (Chef Damu style)', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAA7', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice', verified: 'yes' },
+  ] as any;
+  const chat = async () => 'Have [[Tomato Rice]] for lunch.';
+  await assert.rejects(askWithValidation(chat, twoRows, 'lunch?', {}), /outside the library/);
+});
