@@ -44,11 +44,11 @@ flowchart LR
 | guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Always run BEFORE any model; no model can widen the pool | Live |
 | session-store | In-memory ask sessions (server/session.ts) | 30-min TTL; follow-ups like "another option" reuse stored diet/meal and hide what was just shown; reset via "New conversation" | Live (resets on restart) |
 | semantic-cache | Answer reuse (server/semantic.ts) | A repeat question with the SAME constraints + library + intent is answered with 0 AI calls; "another option" and any constraint change bypass it | Live |
-| rag-retrieval | Full-corpus retrieval (server/rag.ts) | Top video-index matches join the shortlist, labelled "video found - details not extracted yet"; details are never invented | Live |
+| rag-retrieval | Full-corpus retrieval (server/rag.ts) | Top video-index matches join the shortlist, labelled "video found - details not extracted yet"; details are never invented | Committed; live verification pending (index bundling fix dd59c44 awaiting deploy) |
 | minilm-matcher | Local matching model (Xenova/all-MiniLM-L6-v2, pinned revision, Apache-2.0) | Turns question + titles into number patterns for meaning matching and the answer cache. Runs inside the app server; question/recipe text never leaves for matching. Pluggable: `SEMANTIC=off` disables it and the app falls back to plain word rules, honestly labelled | Live, optional |
 | groq-answerer | Groq chat API (openai/gpt-oss-120b) | Writes the answer from the shortlist only; cited recipes are validated server-side, one corrective retry then honest reject | Live |
 | snapshot-data | server/demo-data.json | Dated public video-derived copy of the library; private history never published | Live, owner-refreshed |
-| embeddings-index | server/demo-embeddings.json | Precomputed MiniLM vectors (int8) for all 4468 video titles; regenerated with each snapshot refresh | Live |
+| embeddings-index | server/demo-embeddings.json | Precomputed MiniLM vectors (int8) for all 4468 video titles; regenerated with each snapshot refresh | Committed; bundling fix pending deploy (dd59c44) |
 | live-sheet | Private Google Sheet | Source of truth for recipes, history, traces | Planned (needs account connection) |
 | doc-bridge | Shared Google Doc | Chat bridge to the assistant | Disabled (notification unproven) |
 | passkey-login | Fingerprint login | Optional sign-in addition | Not built |
@@ -86,7 +86,13 @@ flowchart LR
 
 ## Deployment and fallbacks
 
-- Vercel Hobby (free). If MiniLM fails to load, the app says so and uses plain
+- Vercel Hobby (free). The serverless bundle must explicitly include the JSON
+  snapshots: vercel.json `functions["server.ts"].includeFiles` lists
+  `web/dist/**`, `server/demo-data.json`, `server/demo-embeddings.json`
+  (without this the embeddings index silently fails to load and retrieval
+  degrades honestly). Builds trigger on push to main; a Deploy Hook
+  (rebuild-main) exists as a manual fallback when push events stall. If
+  MiniLM fails to load, the app says so and uses plain
   word rules. If Groq is down, asks return an honest error; picks still work
   unranked. If the embeddings index is missing, video suggestions simply stop
   (recipes still work).
@@ -97,6 +103,8 @@ Newest first. SHAs are real commits on main.
 
 | Date (IST) | Commit(s) | What changed |
 | --- | --- | --- |
+| 2026-10-26 18:41 | dd59c44 | vercel.json: JSON snapshots explicitly included in the serverless bundle |
+| 2026-10-26 18:34 | 73f1710 | architecture.md added (this file) |
 | 2026-10-26 18:33 | 7f67f04 | embeddings-index added (4468 video-title vectors, int8) |
 | 2026-10-26 18:27 | 2b6a23d, fb110ca, 272afa6, ea0610c | rag-retrieval added: video matches join ask shortlist with honest labels |
 | 2026-10-26 18:22 | 213b21a, 8e7c134, 82d313d, fe86bdd, 073d61f | Guardrails fail closed without the classifier; absence answers qualified ("none under these filters", never "none in the library") |
