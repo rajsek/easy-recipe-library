@@ -65,19 +65,22 @@ export function wordRe(term: string): RegExp {
 }
 
 // Canonical-ingredient identity: a DERIVED form of an ingredient is not the
-// ingredient itself. "corn starch", "corn flour", "corn syrup", "corn oil",
-// "cornmeal" are corn products, but a user choosing the "corn" ingredient
-// means corn itself - matching a potato chip only because it lists corn
-// starch silently broadens intent (the 2026-10-26 Crispy Chips defect).
-// Rule: occurrences of the word that appear only inside "<word> starch /
-// flour / syrup / oil / meal" (hyphenated or spaced) do not count; at least
-// one occurrence outside those compounds is required. Documented, symmetric
-// for every food word (rice flour is not rice, etc.).
-const DERIVED_SUFFIX = '(?:starch|flour|syrup|oil|meal)s?';
+// ingredient itself - but ONLY where we have grounded evidence of the
+// confusion, not as a global assumption. Grounded case (2026-10-26 defect):
+// "corn starch/flour/syrup/oil" (spaced or hyphenated) are corn products,
+// and a potato chip listing corn starch is not an answer to "corn".
+// Other ingredients keep literal matching until a similar case is evidenced
+// (e.g. atta/wheat flour may well BE intended by "wheat" - unverified).
+const DERIVED_FORMS: Record<string, string[]> = {
+  corn: ['starch', 'flour', 'syrup', 'oil', 'meal']
+};
 export function hasIngredientWord(hay: string, term: string): boolean {
-  const esc = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   if (!wordRe(term).test(hay)) return false;
-  const stripped = hay.replace(new RegExp('\\b' + esc + '\\s*[- ]\\s*' + DERIVED_SUFFIX + '\\b', 'gi'), ' ');
+  const derived = DERIVED_FORMS[term];
+  if (!derived) return true;
+  const esc = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const suffix = '(?:' + derived.join('|') + ')s?';
+  const stripped = hay.replace(new RegExp('\\b' + esc + '\\s*[- ]\\s*' + suffix + '\\b', 'gi'), ' ');
   return wordRe(term).test(stripped);
 }
 
