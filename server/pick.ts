@@ -192,7 +192,7 @@ export function parseNote(note: string): { exclusions: string[]; keywords: strin
   return { exclusions: [...new Set(exclusions)].slice(0, 6), keywords };
 }
 
-export interface PickFilter { diet?: string; meal?: string; }
+export interface PickFilter { diet?: string; meal?: string; dishes?: string[]; }
 
 // Words that describe the request itself, never an ingredient - excluded
 // from the food-word hard filter in ask mode.
@@ -447,7 +447,30 @@ export async function pickForMe(
     });
     parts.push('excluded recipes containing ' + exN.words.map((x) => '"' + x + '"').join(', '));
   }
-  if (kwN.words.length > 0) {
+  // Dish filter (user-selected dish chips): OR across selected dishes - a
+  // card is one dish, so requiring ALL would almost always be empty. Each
+  // dish matches against the recipe NAME only (dish identity lives in the
+  // name; an ingredient mention is not the dish). Every word of the dish
+  // name must be present, so "ven pongal" never matches "ven pongal side
+  // dish" text that lacks a word, and never matches on ingredients alone.
+  const dishSel = (filter.dishes || []).map((d) => String(d || '').trim()).filter(Boolean);
+  let dishZeroed = false;
+  if (dishSel.length > 0) {
+    const beforeDish = candidates.length;
+    candidates = candidates.filter((r) =>
+      dishSel.some((d) => d.toLowerCase().split(/\s+/).every((w) => hasIngredientWord(r.recipe_name || '', w))));
+    parts.push(dishSel.length > 1
+      ? 'dish filter: recipes named like any of ' + dishSel.map((d) => '"' + d + '"').join(', ')
+      : 'dish filter: recipes named like "' + dishSel[0] + '"');
+    if (candidates.length === 0 && beforeDish > 0) {
+      dishZeroed = true;
+      noteZeroMatch = true;
+      parts.push('no checked recipe name matches the selected ' + (dishSel.length > 1 ? 'dishes' : 'dish') +
+        ' under the current filters (' + beforeDish + ' other ' + (beforeDish === 1 ? 'recipe' : 'recipes') +
+        ' qualified before the dish filter). Nothing filled in from elsewhere');
+    }
+  }
+  if (kwN.words.length > 0 && !dishZeroed) {
     // Library words (a known ingredient/dish word, or an unambiguous
     // interpretation of one) are HARD requirements and combine as AND:
     // "onion paneer" means a recipe with BOTH, never a silent OR. Words the
@@ -497,6 +520,11 @@ export async function pickForMe(
       : 'Your note ("' + note.trim().slice(0, 60) + '") could not be applied - free-text wishes need AI ranking, which is off. Picks below are standard unranked matches.';
   } else if (note && note.trim() && parts.length > 0) {
     noteInfo = 'Note constraints applied before ranking: ' + parts.join('; ') + '.';
+  }
+  if (!noteInfo && parts.length > 0) {
+    // No free-text note, but chip filters (dish selection) still constrained
+    // the pool - say so exactly the same way.
+    noteInfo = 'Filters applied before ranking: ' + parts.join('; ') + '.';
   }
   // Meaning-aware slim AFTER every hard constraint, BEFORE the AI rank: the
   // model sees the ~12 most relevant candidates instead of the whole pool -
@@ -630,6 +658,27 @@ const INGREDIENT_PHRASES = [
  * in verified ingredient text plus single words from ingredientVocab, with
  * single words dropped when they appear ONLY inside a recognised phrase.
  * Deterministic, no AI, derived only from the verified library. */
+/** Dish vocabulary for the dish-filter typeahead: the DISH identity of each
+ * verified card - recipe_name with parenthetical attributions/notes removed
+ * ("Ven Pongal (Chef Damu style...)" -> "Ven Pongal"). Verified cards only
+ * (picks come from checked recipes); indexed-but-unextracted video titles are
+ * NOT dish identities (channel/episode noise) and are never offered here.
+ * Deterministic, no AI. */
+export function dishVocab(recipes: RecipeRow[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const r of recipes) {
+    if (String(r.verified).toLowerCase() !== 'yes') continue;
+    const name = String(r.recipe_name || '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+    if (name.length < 3) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+}
+
 export function typeaheadVocab(recipes: RecipeRow[]): string[] {
   const texts = recipes
     .filter((r) => String(r.verified).toLowerCase() === 'yes')

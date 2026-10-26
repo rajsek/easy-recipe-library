@@ -464,3 +464,42 @@ test('derived-form rule is evidence-scoped, not global: "rice flour" still match
   const r = await pickForMe({}, 'rice', rows as any, {});
   assert.equal(r.picks.length, 2, 'no ingredient exclusion without a grounded case');
 });
+
+
+const dishRows = [
+  { recipe_name: 'Ven Pongal (Chef Damu style)', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD1', diet: 'Veg', meal_type: 'breakfast', ingredients: 'rice, moong dal, pepper', verified: 'yes' },
+  { recipe_name: 'Tomato Pongal', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD2', diet: 'Veg', meal_type: 'breakfast', ingredients: 'rice, tomato, moong dal', verified: 'yes' },
+  { recipe_name: 'Karuveppilai Sadam', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD3', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice, curry leaves, pongal leftover', verified: 'yes' },
+  { recipe_name: 'Paruppu Poli', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD4', diet: 'Veg', meal_type: 'snack', ingredients: 'chana dal, jaggery, maida', verified: 'yes' },
+] as any[];
+
+test('dish filter: matches recipe NAME identity only, never ingredient mentions', async () => {
+  const r = await pickForMe({ dishes: ['pongal'] }, '', dishRows, {});
+  const names = r.picks.map((p) => p.name);
+  assert.ok(names.some((n) => n.startsWith('Ven Pongal')) && names.includes('Tomato Pongal'), 'both pongal dishes match');
+  assert.ok(!names.includes('Karuveppilai Sadam'), 'ingredient-only mention of "pongal" is not the dish');
+  assert.ok(!names.includes('Paruppu Poli'), 'unrelated dish excluded');
+  assert.match(r.noteInfo, /dish filter: recipes named like "pongal"/);
+});
+
+test('dish filter: multi-word dish needs every word in the name; chips combine as OR', async () => {
+  const one = await pickForMe({ dishes: ['ven pongal'] }, '', dishRows, {});
+  assert.deepEqual(one.picks.map((p) => p.name), ['Ven Pongal (Chef Damu style)'], 'all dish words required within a chip');
+  const or = await pickForMe({ dishes: ['Ven Pongal', 'Paruppu Poli'] }, '', dishRows, {});
+  const names = or.picks.map((p) => p.name);
+  assert.equal(names.length, 2, 'OR across selected dishes - a card is one dish');
+  assert.ok(names.includes('Paruppu Poli') && names.some((n) => n.startsWith('Ven Pongal')));
+  assert.match(or.noteInfo, /named like any of "Ven Pongal", "Paruppu Poli"/);
+});
+
+test('dish filter combines with note words as AND', async () => {
+  const r = await pickForMe({ dishes: ['pongal'] }, 'tomato', dishRows, {});
+  assert.deepEqual(r.picks.map((p) => p.name), ['Tomato Pongal'], 'dish AND ingredient note intersect');
+});
+
+test('dish filter: zero name matches is honest, never filled from elsewhere', async () => {
+  const r = await pickForMe({ dishes: ['biryani'] }, '', dishRows, {});
+  assert.equal(r.picks.length, 0);
+  assert.match(r.noteInfo, /no checked recipe name matches the selected dish/);
+  assert.match(r.noteInfo, /Nothing filled in from elsewhere/);
+});

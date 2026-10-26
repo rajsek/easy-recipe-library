@@ -17,7 +17,7 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords, typeaheadVocab } from './pick.js';
+import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords, typeaheadVocab, dishVocab, hasIngredientWord } from './pick.js';
 import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION, loadSemantic } from './semantic.js';
 import { retrieveVideos, ragStatus } from './rag.js';
 import { getSession, putSession, clearSession, isMoreIntent, validSessionId } from './session.js';
@@ -77,6 +77,9 @@ app.get('/api/recipes', async (_req, res) => res.json(await getRecipes()));
 // from the verified library, deterministic, no AI per keystroke.
 app.get('/api/ingredients', async (_req, res) => res.json({ ingredients: typeaheadVocab(await getRecipeRows() as any) }));
 
+// Dish-filter typeahead vocabulary: dish identities of verified cards.
+app.get('/api/dishes', async (_req, res) => res.json({ dishes: dishVocab(await getRecipeRows() as any) }));
+
 app.get('/api/history', async (_req, res) => {
   const h = await getHistory();
   res.json([...h, ...demoMemory.history]);
@@ -116,7 +119,11 @@ app.post('/api/pick', async (req, res) => {
   const meal = String(req.body?.meal || '');
   if (diet && !['Veg', 'Non-veg', 'Egg', 'Contains egg'].includes(diet)) return res.status(400).json({ error: 'bad diet' });
   if (meal.length > 40) return res.status(400).json({ error: 'bad meal' });
-  const filter = { diet, meal };
+  // Dish chips: user-selected filter input. Bounded like every other input.
+  const dishesRaw = Array.isArray(req.body?.dishes) ? req.body.dishes : [];
+  if (dishesRaw.length > 10) return res.status(400).json({ error: 'too many dishes' });
+  const dishes = dishesRaw.map((d: any) => String(d || '').trim()).filter((d: string) => d.length > 0 && d.length <= 60);
+  const filter = { diet, meal, dishes };
   const note = String(req.body?.note || '').slice(0, 200);
   const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(), getPickRows()]);
   const ex = excludedIds(
@@ -155,7 +162,7 @@ app.post('/api/pick', async (req, res) => {
       const cardIds: Record<string, true> = {};
       for (const p of result.picks) { const m = String(p.url || '').match(/v=([\w-]{11})/); if (m) cardIds[m[1]] = true; }
       for (const id of Object.keys(seenIds)) cardIds[id] = true; // no repeats across pages
-      const found = await retrieveVideos(note + ' ' + diet + ' ' + meal, 12, cardIds);
+      const found = await retrieveVideos([note, dishes.join(' '), diet, meal].filter(Boolean).join(' '), 12, cardIds);
       const dietOk = (h: string) => {
         const hl = String(h || '').toLowerCase();
         if (diet === 'Veg') return hl === 'veg';
@@ -163,7 +170,11 @@ app.post('/api/pick', async (req, res) => {
         if (diet === 'Egg' || diet === 'Contains egg') return /egg/.test(hl);
         return hl !== ''; // unfiltered: still require a known hint value
       };
-      if (found) videoAlts = found.filter((v) => v.score >= 0.45 && dietOk(v.diet_hint)).slice(0, 5 - result.picks.length)
+      // Selected dishes are a HARD constraint on video alternatives too -
+      // same OR-across-chips, every dish word in the video TITLE. A soft
+      // retrieval boost alone could fill the gap with unrelated videos.
+      const dishOk = (t: string) => dishes.length === 0 || dishes.some((d: string) => d.toLowerCase().split(/\s+/).every((w: string) => hasIngredientWord(t, w)));
+      if (found) videoAlts = found.filter((v) => v.score >= 0.45 && dietOk(v.diet_hint) && dishOk(v.title)).slice(0, 5 - result.picks.length)
         .map((v) => ({ video_id: v.video_id, title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, diet: v.diet_hint || '', status: 'video found - details not extracted yet' }));
     } catch { videoAlts = []; }
   }
@@ -250,7 +261,10 @@ app.post('/api/ask-ai', async (req, res) => {
     const exN = normalizeNoteWords(parseNote(question).exclusions, vocab);
     const excludedHash = createHash('sha256').update(JSON.stringify([Object.keys(ex.videoOnly).sort(), Object.keys(ex.titles).sort()])).digest('hex').slice(0, 12);
     const intent = more ? 'more' : 'answer';
-    const sig = constraintSignature({ diet, meal, exclusions: exN.words, foodWords: kwN.words, excludedHash, libraryVersion: libraryVersion(recipes as any), intent });
+    // Dish chips: parsed before the cache signature so a different dish
+    // selection NEVER reuses a cached answer.
+    const askDishes = (Array.isArray(req.body?.dishes) ? req.body.dishes : []).map((d: any) => String(d || '').trim()).filter((d: string) => d.length > 0 && d.length <= 60).slice(0, 10);
+    const sig = constraintSignature({ diet, meal, exclusions: exN.words, foodWords: kwN.words, dishes: askDishes, excludedHash, libraryVersion: libraryVersion(recipes as any), intent });
     const cached = await askCache.get(question, sig, intent);
     if (cached) {
       await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: semantic cache hit - no model call', reply_text: JSON.stringify(cached).slice(0, 400), handling: 'cache hit; 0 AI calls; 0 tokens', status: 'ok', semantic: 'hit', ai_calls: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 });
@@ -260,7 +274,14 @@ app.post('/api/ask-ai', async (req, res) => {
     if (classifyFn && keywords.length > 0) {
       try { cls = await classifyFn(keywords); } catch { cls = {}; }
     }
-    const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, vocab, filterCandidateRecipes(recipes as any, {}));
+    let { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, vocab, filterCandidateRecipes(recipes as any, {}));
+    // Dish chips constrain ask the same way they constrain pick: dish
+    // identity lives in the recipe name; OR across selected dishes.
+    if (askDishes.length > 0 && !zeroReason) {
+      const kept = candidates.filter((r: any) => askDishes.some((d: string) => d.toLowerCase().split(/\s+/).every((w: string) => hasIngredientWord(String(r.recipe_name || ''), w))));
+      if (kept.length === 0) zeroReason = 'no checked recipe name matches the selected dish' + (askDishes.length > 1 ? 'es' : '');
+      candidates = kept;
+    }
     if (zeroReason) {
       // Honest zero still offers full-corpus video ideas, clearly labelled
       // unextracted - a gap in the checked cards is not a dead end.

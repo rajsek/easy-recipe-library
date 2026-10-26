@@ -155,6 +155,7 @@ export interface CacheKeyParts {
   excludedHash: string;   // current no-repeat set
   libraryVersion: string; // corpus snapshot version / content hash
   intent: string;         // 'answer' | 'more' etc. - 'more' never caches
+  dishes?: string[];      // selected dish chips - different dishes, different answer
 }
 
 export function constraintSignature(k: CacheKeyParts): string {
@@ -163,6 +164,7 @@ export function constraintSignature(k: CacheKeyParts): string {
     norm(k.diet), norm(k.meal),
     [...k.exclusions].map(norm).sort().join(','),
     [...k.foodWords].map(norm).sort().join(','),
+    [...(k.dishes || [])].map(norm).sort().join(','),
     k.excludedHash, k.libraryVersion, k.intent, SEMANTIC_VERSION,
   ].join('|');
   return createHash('sha256').update(raw).digest('hex').slice(0, 24);

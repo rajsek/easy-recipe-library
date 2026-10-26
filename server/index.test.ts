@@ -146,3 +146,38 @@ test('Load more: batches are disjoint and respect the same filters', async () =>
     assert.equal(v.status, 'video found - details not extracted yet', 'labels survive paging');
   }
 });
+
+test('dish filter API: /api/dishes serves normalized dish identities; /api/pick honors and binds them', async () => {
+  const d = await fetch(base + '/api/dishes').then((r) => r.json());
+  assert.ok(Array.isArray(d.dishes) && d.dishes.length > 5, 'dish vocabulary served');
+  assert.ok(d.dishes.every((x: string) => !/[()]/.test(x)), 'parenthetical attributions stripped');
+  assert.ok(d.dishes.some((x: string) => /^Ven Pongal$/.test(x)), 'known dish present in clean form');
+  const post = (body: any) => fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const dished = await post({ diet: '', meal: '', note: '', dishes: ['Ven Pongal'], seen: [] });
+  assert.ok(dished.picks.length >= 1 && dished.picks.every((p: any) => /ven/i.test(p.name) && /pongal/i.test(p.name)), 'every pick matches the selected dish');
+  assert.match(dished.noteInfo || '', /dish filter/, 'dish constraint disclosed');
+  const zero = await post({ diet: '', meal: '', note: '', dishes: ['zzz-no-such-dish'], seen: [] });
+  assert.equal(zero.picks.length, 0, 'unknown dish: zero picks');
+  assert.match(zero.noteInfo || '', /no checked recipe name matches/, 'honest zero, no filling');
+  const tooMany = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dishes: new Array(11).fill('x') }) });
+  assert.equal(tooMany.status, 400, 'dish input is bounded');
+});
+
+test('dish filter: dish-only Ask works, cache separates dish selections, video alternatives are HARD-filtered', async () => {
+  // Dish-only ask (no note, no ingredient chips): the gate fix client-side +
+  // server must answer constrained to the selected dish.
+  const a1 = await ask({ question: 'Dishes: Ven Pongal', dishes: ['Ven Pongal'], session_id: 'dishsession01' });
+  assert.equal(a1.status, 200);
+  assert.equal(typeof a1.json.answer, 'string');
+  const named = (a1.json.recipes || []).map((r: any) => String(r.name || r.recipe_name || ''));
+  assert.ok(named.every((n: string) => /ven/i.test(n) && /pongal/i.test(n)), 'ask names only the selected dish, got ' + named.join(', '));
+  // Cache: same question + different dishes must NOT hit the cache.
+  const a2 = await ask({ question: 'Dishes: Ven Pongal', dishes: ['Paruppu Poli'], session_id: 'dishsession02' });
+  assert.notEqual(a2.json.cached, true, 'different dish selection never reuses the cached answer');
+  // Video alternatives: with a dish selected, every returned alternative's
+  // title must contain all words of one selected dish (no unrelated fill).
+  const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: '', dishes: ['Ven Pongal'], seen: [] }) }).then((x) => x.json());
+  for (const v of r.videos || []) {
+    assert.ok(/ven/i.test(v.title) && /pongal/i.test(v.title), 'video alternative off-dish: ' + v.title);
+  }
+});
