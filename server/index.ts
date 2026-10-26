@@ -132,8 +132,30 @@ app.post('/api/pick', async (req, res) => {
   const slimFn = async (cs: any[]) => semanticRank((note || '') + ' ' + diet + ' ' + meal, cs, 12);
   const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn, slimFn);
   await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
+  // Discovery fill: when fewer than 5 checked recipes qualify, offer labelled
+  // full-corpus video alternatives so a thin checked pool is not a dead end.
+  // These are NOT checked picks: not counted, not recorded as suggestions,
+  // ingredients/steps unknown. Diet filter applies via title-derived hints
+  // only (unknown hints are excluded when a diet filter is set).
+  let videoAlts: any[] = [];
+  if (result.picks.length > 0 && result.picks.length < 5 && note.trim()) {
+    try {
+      const cardIds: Record<string, true> = {};
+      for (const p of result.picks) { const m = String(p.url || '').match(/v=([\w-]{11})/); if (m) cardIds[m[1]] = true; }
+      const found = await retrieveVideos(note + ' ' + diet + ' ' + meal, 12, cardIds);
+      const dietOk = (h: string) => {
+        const hl = String(h || '').toLowerCase();
+        if (diet === 'Veg') return hl === 'veg';
+        if (diet === 'Non-veg') return /egg|non-?veg|chicken|mutton|fish|prawn|meat/i.test(hl);
+        if (diet === 'Egg' || diet === 'Contains egg') return /egg/.test(hl);
+        return hl !== ''; // unfiltered: still require a known hint value
+      };
+      if (found) videoAlts = found.filter((v) => v.score >= 0.45 && dietOk(v.diet_hint)).slice(0, 5 - result.picks.length)
+        .map((v) => ({ video_id: v.video_id, title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, diet: v.diet_hint || '', status: 'video found - details not extracted yet' }));
+    } catch { videoAlts = []; }
+  }
   const usage = sink.calls.reduce((a, c) => ({ prompt: a.prompt + c.prompt_tokens, completion: a.completion + c.completion_tokens, total: a.total + c.total_tokens }), { prompt: 0, completion: 0, total: 0 });
-  res.json({ ...result, usage: { ...usage, calls: sink.calls.length, provider: aiProvider || '' }, semantic: semanticStatus().available ? SEMANTIC_VERSION : 'off' });
+  res.json({ ...result, videos: videoAlts, usage: { ...usage, calls: sink.calls.length, provider: aiProvider || '' }, semantic: semanticStatus().available ? SEMANTIC_VERSION : 'off' });
 });
 
 // Request queue ("ask in the app"): writes a row to the private Queue tab;
