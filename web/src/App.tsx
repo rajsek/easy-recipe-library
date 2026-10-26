@@ -42,7 +42,7 @@ function TokenGate({ onUnlock }: { onUnlock: (t: string) => void }) {
 const TABS: [string, string][] = [
   ['pick', 'Pick for me'], ['recipes', 'Recipes'], ['snack', 'Snacks'],
   ['breakfast', 'Breakfast'], ['lunch/dinner', 'Sunday meals'], ['sweets', 'Sweets'],
-  ['all', 'All videos'], ['history', 'History']
+  ['all', 'All videos'], ['history', 'History'], ['comms', 'Comms']
 ];
 const INDEX_TABS = new Set(['snack', 'breakfast', 'lunch/dinner', 'sweets', 'all']);
 const HIST_STATES: [string, string][] = [
@@ -232,6 +232,7 @@ export default function App() {
   const setTab = (t: string) => {
     setTabState(t);
     window.history.replaceState(null, '', '#' + t);
+    if (t === 'comms') loadTraces();
   };
   const [channels, setChannels] = useState<string[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -249,10 +250,20 @@ export default function App() {
   const [askAiResult, setAskAiResult] = useState<{ text: string; recipes: AskRecipe[]; question: string; diet: string; meal: string } | null>(null);
   const [askAiError, setAskAiError] = useState('');
   const [pickForm, setPickForm] = useState<{ note: string; diet: string; meal: string } | null>(null);
+  interface TraceRow { request_id: string; ts: string; mode: string; request_text: string; outbound_payload: string; reply_text: string; handling: string; status: string; error?: string }
+  const [traces, setTraces] = useState<TraceRow[]>([]);
+  const [tracesNote, setTracesNote] = useState('');
   const [aiOn, setAiOn] = useState(false);
 
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
+  }, []);
+
+  const loadTraces = useCallback(() => {
+    apiFetch('/api/traces').then((r) => r.json()).then((j) => {
+      setTraces(j.traces || []);
+      setTracesNote(j.enabled ? (j.note || '') : 'Trace storage is off: no BRIDGE_KEY set on this deployment.');
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -488,6 +499,26 @@ export default function App() {
                 </div>
               </article>
             ))
+        )}
+
+        {tab === 'comms' && (
+          <section>
+            <h2>Communication trace</h2>
+            <p className="muted">What the app sent and received per request, oldest first. Contents are stored encrypted; passwords, tokens and keys are never recorded.</p>
+            {tracesNote && <p className="muted">{tracesNote}</p>}
+            {traces.length === 0 ? <p className="muted">No traced requests yet. Ask an AI question on the Pick tab first.</p>
+              : traces.map((t) => (
+                <div className="card" key={t.request_id} style={{ marginBottom: 10 }}>
+                  <div className="cardbody">
+                    <div className="muted small">{t.ts} · {t.mode} · {t.status}{t.error ? ' · ' + t.error : ''} · id {t.request_id}</div>
+                    <p><b>You asked:</b> {t.request_text}</p>
+                    <p><b>Sent:</b> {t.outbound_payload}</p>
+                    <p><b>Reply:</b> {t.reply_text}</p>
+                    <p className="muted small">{t.handling}</p>
+                  </div>
+                </div>
+              ))}
+          </section>
         )}
 
         {tab === 'history' && (
