@@ -19,6 +19,7 @@ import {
 } from './data.js';
 import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords } from './pick.js';
 import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION, loadSemantic } from './semantic.js';
+import { retrieveVideos, ragStatus } from './rag.js';
 import { getSession, putSession, clearSession, isMoreIntent, validSessionId } from './session.js';
 import { createHash } from 'node:crypto';
 import { CommTrace, MemoryTraceStore } from './comm-trace.js';
@@ -59,7 +60,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/state', (_req, res) => res.json({ mode, ai: !!aiProvider, aiProvider, semantic: semanticStatus() }));
+app.get('/api/state', (_req, res) => res.json({ mode, ai: !!aiProvider, aiProvider, semantic: semanticStatus(), rag: ragStatus() }));
 
 app.get('/api/channels', async (_req, res) => res.json(await getChannels()));
 
@@ -233,11 +234,22 @@ app.post('/api/ask-ai', async (req, res) => {
       const slim = await semanticRank(question, candidates, 25);
       if (slim) forModel = slim;
     }
-    const { text, recipes: cited } = await askFn(forModel, question, { diet, meal });
+    // Full-corpus retrieval: top video-index matches for this question,
+    // excluding videos already represented by an extracted card. The model
+    // may suggest them, clearly labelled "details not extracted yet".
+    const cardIds: Record<string, true> = {};
+    for (const c of forModel) { const m = String(c.video_url || '').match(/v=([\w-]{11})/); if (m) cardIds[m[1]] = true; }
+    let videoRefs: any[] = [];
+    try {
+      const found = await retrieveVideos(question + ' ' + diet + ' ' + meal, 10, cardIds);
+      if (found) videoRefs = found.filter((v) => v.score >= 0.45).slice(0, 8).map((v) => ({ video_id: v.video_id, title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, status: 'video found - details not extracted yet' }));
+    } catch { videoRefs = []; }
+    const { text, recipes: cited, videos: citedVideos } = await askFn(forModel, question, { diet, meal }, videoRefs);
     const usage = sink.calls.reduce((a, c) => ({ prompt: a.prompt + c.prompt_tokens, completion: a.completion + c.completion_tokens, total: a.total + c.total_tokens }), { prompt: 0, completion: 0, total: 0 });
     const body = {
       answer: text,
       recipes: cited.map((r: any) => ({ name: r.recipe_name, url: r.video_url, time: r.time_notes || '', diet: r.diet || '', meal: r.meal_type || '', reason: '' })),
+      videos: (citedVideos || []).map((v: any) => ({ title: v.title, url: v.url, channel: v.channel, status: v.status })),
     };
     await askCache.put(question, sig, body);
     if (sessionId) putSession(sessionId, { diet, meal, exclusions: exN.words, lastVideoIds: cited.map((r: any) => String(r.video_url || '')).map((u: string) => (u.match(/v=([\w-]{11})/) || [])[1] || '').filter(Boolean) });
