@@ -364,7 +364,7 @@ export default function App() {
             <p className="span-all">
               <a
                 className="btn"
-                href={'https://wa.me/?text=' + encodeURIComponent(
+                href={'https://wa.me/16508702892?text=' + encodeURIComponent(
                   'Meal pick request from my recipe app:\n' +
                   'Diet: ' + (pdiet || 'Veg + Non-veg') + '\n' +
                   'Meal: ' + (pmeal || 'any') +
@@ -372,7 +372,7 @@ export default function App() {
                   '\nPlease pick from my recipe library.'
                 )}
                 target="_blank" rel="noopener"
-              >Ask in WhatsApp (sends this request to your Instinct chat)</a>
+              >Open WhatsApp to ask</a>
             </p>
             {pickResult.picks.map((p) => (
               <article className="card" key={p.name}>
