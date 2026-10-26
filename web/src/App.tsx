@@ -249,6 +249,15 @@ export default function App() {
   interface AskRecipe { name: string; url: string; time: string; diet: string; meal: string; reason: string }
   const [askAiResult, setAskAiResult] = useState<{ text: string; recipes: AskRecipe[]; question: string; diet: string; meal: string } | null>(null);
   const [askAiError, setAskAiError] = useState('');
+  // App-managed conversation: the AI provider is stateless; the server keeps
+  // a compact session (diet/meal/exclusions/last ideas) keyed by this id so
+  // follow-ups like "another option" continue the same request.
+  const [sessionId, setSessionId] = useState<string>(() => {
+    let id = localStorage.getItem('ask_session_id') || '';
+    if (!/^[a-zA-Z0-9-]{8,64}$/.test(id)) { id = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2, 10)); localStorage.setItem('ask_session_id', id); }
+    return id;
+  });
+  const [sessionInfo, setSessionInfo] = useState<{ continued: boolean; diet: string; meal: string } | null>(null);
   const [pickForm, setPickForm] = useState<{ note: string; diet: string; meal: string } | null>(null);
   interface TraceRow { request_id: string; ts: string; mode: string; request_text: string; outbound_payload: string; reply_text: string; handling: string; status: string; error?: string }
   const [traces, setTraces] = useState<TraceRow[]>([]);
@@ -291,15 +300,27 @@ export default function App() {
     try {
       const r = await apiFetch('/api/ask-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, diet: d, meal: m })
+        body: JSON.stringify({ question: q, diet: d, meal: m, session_id: sessionId })
       });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not get an answer'); }
-      const { answer, recipes } = await r.json();
-      setAskAiResult({ text: answer, recipes: recipes || [], question: q, diet: d, meal: m });
+      const j = await r.json();
+      setAskAiResult({ text: j.answer, recipes: j.recipes || [], question: q, diet: j.session?.diet ?? d, meal: j.session?.meal ?? m });
+      setSessionInfo(j.session ? { continued: !!j.session.continued, diet: j.session.diet || '', meal: j.session.meal || '' } : null);
       setAskAiState('done');
     } catch (e: any) {
       setAskAiError(e.message || 'could not get an answer'); setAskAiState('error');
     }
+  }
+
+  async function newConversation() {
+    try {
+      await apiFetch('/api/session/reset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: sessionId }) });
+    } catch { /* best effort */ }
+    const id = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2, 10);
+    localStorage.setItem('ask_session_id', id);
+    setSessionId(id);
+    setSessionInfo(null);
+    setAskAiResult(null); setAskAiState('idle');
   }
 
   async function doPick() {
@@ -446,6 +467,14 @@ export default function App() {
                     <p className="muted small">
                       Answer to: "{askAiResult.question}" · {askAiResult.diet || 'Veg + Non-veg'} · {askAiResult.meal || 'Any meal'}
                     </p>
+                    {sessionInfo && (
+                      <p className="chips">
+                        {sessionInfo.continued && <span className="chip">continued conversation</span>}
+                        {sessionInfo.diet && <span className="chip">session diet: {sessionInfo.diet}</span>}
+                        {sessionInfo.meal && <span className="chip">session meal: {sessionInfo.meal}</span>}
+                        <button className="btn ghost" onClick={newConversation} title="Forget this conversation's filters and last ideas">New conversation</button>
+                      </p>
+                    )}
                     {(askAiResult.question !== pnote.trim() || askAiResult.diet !== pdiet || askAiResult.meal !== pmeal) && (
                       <p className="chips"><span className="chip warn">note/filters changed since this answer - press "Ask about the note above" again</span></p>
                     )}
