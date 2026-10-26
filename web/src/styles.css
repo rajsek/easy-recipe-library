@@ -128,3 +128,4 @@ a.rowtitle:hover { color:var(--leaf); }
 .tachips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
 .tachip { padding: 6px 12px; border-radius: 16px; border: 1px solid var(--line, #ccc); background: #fff; font-size: 14px; cursor: pointer; min-height: 32px; }
 .tachip.active, .tachip:hover { background: #eef4ff; border-color: #7aa2f7; }
+.tachip.sel { background: #e8f5e9; border-color: #66bb6a; }
