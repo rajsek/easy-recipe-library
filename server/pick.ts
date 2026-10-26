@@ -164,7 +164,7 @@ const ASK_REQUEST_WORDS = new Set(('breakfast lunch dinner snack snacks sweet sw
   'recipe recipes dish dishes food cook cooking make idea ideas quick easy today tonight tomorrow week weekday weekend ' +
   'which what who whom whose when where why how do does did me my we our us you your have has had any some show give list tell ' +
   'is are was were be been the in on for of to at by with without and or not no can could should would will please get got ' +
-  'something anything everything').split(' '));
+  'something anything everything veg veggie vegetarian non-veg nonveg').split(' '));
 
 // Inventory/direct lookups about the library itself ("which bread recipes do
 // I have?", "how do I make X?", "list my chutneys") are not recommendation
