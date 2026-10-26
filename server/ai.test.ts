@@ -71,3 +71,41 @@ test('ambiguous prefix shared by two recipes is accepted for NEITHER', async () 
   const chat = async () => 'Have [[Tomato Rice]] for lunch.';
   await assert.rejects(askWithValidation(chat, twoRows, 'lunch?', {}), /outside the library/);
 });
+
+import { constrainAskCandidates } from './pick.js';
+
+const askRows = [
+  { recipe_name: 'Besan Bread Toast', video_url: 'https://www.youtube.com/watch?v=BBBBBBBBBB1', diet: 'Veg', meal_type: 'snack, breakfast', ingredients: 'bread, besan', verified: 'yes' },
+  { recipe_name: 'Peanut Chutney', video_url: 'https://www.youtube.com/watch?v=BBBBBBBBBB2', diet: 'Veg', meal_type: 'side', ingredients: 'peanut, chilli', verified: 'yes' },
+  { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=BBBBBBBBBB3', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal', verified: 'yes' },
+] as any;
+
+test('ask constraints: bread regression holds - bread question zeros when no bread recipe qualifies', () => {
+  const noBread = askRows.filter((r) => r.recipe_name !== 'Besan Bread Toast');
+  const r = constrainAskCandidates(noBread, 'which bread recipes do I have?', {}, { bread: 'food', recipes: 'unknown', have: 'unknown' });
+  assert.equal(r.candidates.length, 0);
+  assert.match(r.zeroReason || '', /"bread"/);
+});
+
+test('ask constraints: food word hard-filters to matching candidates', () => {
+  const r = constrainAskCandidates(askRows, 'any bread snack ideas?', {}, { bread: 'food', snack: 'unknown', ideas: 'unknown' });
+  assert.deepEqual(r.candidates.map((x) => x.recipe_name), ['Besan Bread Toast']);
+});
+
+test('ask constraints: no-repeat hides recent picks UNLESS the question names the dish', () => {
+  const ex = { BBBBBBBBBB1: true }; // Besan Bread Toast suggested recently
+  const generic = constrainAskCandidates(askRows, 'what snack should I make?', ex, {});
+  assert.ok(!generic.candidates.some((r) => r.recipe_name === 'Besan Bread Toast'), 'hidden in generic ask');
+  const direct = constrainAskCandidates(askRows, 'how do I make Besan Bread Toast?', ex, {});
+  assert.ok(direct.candidates.some((r) => r.recipe_name === 'Besan Bread Toast'), 'direct question stays answerable');
+});
+
+test('ask constraints: "no peanut" exclusion is hard', () => {
+  const r = constrainAskCandidates(askRows, 'chutney ideas, no peanut', {}, {});
+  assert.ok(!r.candidates.some((x) => /peanut/i.test(x.recipe_name)));
+});
+
+test('ask constraints: unclassified/mood words never zero a natural question', () => {
+  const r = constrainAskCandidates(askRows, 'what is the quickest breakfast?', {}, { quickest: 'mood', breakfast: 'unknown' });
+  assert.equal(r.candidates.length, 3, 'no hard filter without an explicit food word');
+});
