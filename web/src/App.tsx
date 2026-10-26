@@ -332,7 +332,9 @@ export default function App() {
         {tab === 'pick' && (
           <section className="pickpanel">
             <h2>Tonight's ideas</h2>
-            <p className="muted small">Suggestions come only from checked recipes, never repeated within 30 days.</p>
+            <p className="muted small">{dataMode === 'demo'
+              ? 'Suggestions come only from checked recipes. Repeats are avoided only while this demo\'s memory lasts - it resets without warning.'
+              : 'Suggestions come only from checked recipes, never repeated within 30 days.'}</p>
             <input placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote} onChange={(e) => setPnote(e.target.value)} />
             <div className="pickcontrols">
               <select value={pdiet} onChange={(e) => setPdiet(e.target.value)}>
