@@ -25,6 +25,14 @@ export interface TraceEntry {
   retries?: number;
   model?: string;
   prompt_version?: string;
+  // Provider-REPORTED usage (never estimated): summed across the request's
+  // AI calls; zero/omitted when the provider does not report.
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  ai_calls?: number;
+  provider_request_ids?: string[];
+  semantic?: string; // 'hit' | 'miss' | 'off:<reason>' for the cache; rank assist noted in handling
 }
 
 // Strip anything that looks like a secret before any storage or log line.
