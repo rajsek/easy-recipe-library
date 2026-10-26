@@ -18,6 +18,8 @@ import {
   addQueueRequest, getQueueRequest
 } from './data.js';
 import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote } from './pick.js';
+import { CommTrace, MemoryTraceStore } from './comm-trace.js';
+import { randomUUID } from 'node:crypto';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -131,8 +133,20 @@ app.post('/api/ask', async (req, res) => {
 // Instant AI answer ("free AI in app" mode). Advisory-only: constrained to
 // verified recipes, refuses medical/nutrition/allergy advice and off-topic
 // questions (prompt-enforced). Honest 503 when no provider is configured.
+const commTrace = CommTrace.fromEnv(new MemoryTraceStore());
+
+app.get('/api/traces', async (_req, res) => {
+  res.json({ enabled: commTrace.enabled, persistent: false, note: 'Demo store resets on restart; the encrypted Sheet-backed store lands with the Google connection.', traces: await commTrace.readAll() });
+});
+app.delete('/api/traces', async (_req, res) => {
+  await (commTrace as any).store?.clear?.();
+  res.json({ cleared: true });
+});
+
 app.post('/api/ask-ai', async (req, res) => {
   if (!askFn) return res.status(503).json({ error: 'AI answers are not set up on this deployment.' });
+  const traceId = randomUUID().slice(0, 8);
+  const traceBase = { request_id: traceId, ts: new Date().toISOString(), mode: 'ai' as const, request_text: String(req.body?.question || '').slice(0, 500), model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b', prompt_version: 'ask-v2-json' };
   const question = String(req.body?.question || '').trim();
   if (!question) return res.status(400).json({ error: 'no question given' });
   if (question.length > 500) return res.status(400).json({ error: 'question too long (500 chars max)' });
@@ -156,14 +170,20 @@ app.post('/api/ask-ai', async (req, res) => {
       try { cls = await classifyFn(keywords); } catch { cls = {}; }
     }
     const { candidates, zeroReason } = constrainAskCandidates(base, question, ex, cls);
-    if (zeroReason) return res.json({ answer: 'No verified recipe in your library matches that under these filters - nothing invented to fill the gap. Try different words or fewer filters.' });
+    if (zeroReason) {
+      await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer', handling: 'no candidates; no model call', status: 'ok' });
+      return res.json({ answer: 'No verified recipe in your library matches that under these filters - nothing invented to fill the gap. Try different words or fewer filters.', request_id: traceId });
+    }
     const { text, recipes: cited } = await askFn(candidates, question, { diet, meal });
+    await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' verified candidates + question', reply_text: text, handling: 'filters: diet=' + (diet || 'any') + ' meal=' + (meal || 'any') + '; ' + cited.length + ' cited cards; status 200', status: 'ok' });
     res.json({
       answer: text,
+      request_id: traceId,
       recipes: cited.map((r: any) => ({ name: r.recipe_name, url: r.video_url, time: r.time_notes || '', diet: r.diet || '', meal: r.meal_type || '', reason: '' })),
     });
   } catch {
-    res.status(502).json({ error: 'The AI answer failed this time - please try again.' });
+    await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai', reply_text: '', handling: 'model or validation failure', status: 'error', error: 'AI answer failed validation or provider call' });
+    res.status(502).json({ error: 'The AI answer failed this time - please try again.', request_id: traceId });
   }
 });
 
