@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
-  getHistoryRows, getPickRows, saveHistory, recordPick, mode
+  getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode
 } from './data.js';
 import { pickForMe, excludedIds, type RankFn } from './pick.js';
 
@@ -132,7 +132,7 @@ app.post('/api/pick', async (req, res) => {
   const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(), getPickRows()]);
   const ex = excludedIds(
     mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
-    picks
+    mode === 'demo' ? [...picks, ...demoPicks] : picks
   );
   const result = await pickForMe(filter, note, recipes as any, ex, rankFn);
   await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
