@@ -182,10 +182,26 @@ test('AI on + keyword nothing mentions: ranker interprets the note instead of ze
     { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH1', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal, oil', verified: 'yes' },
     { recipe_name: 'Fruit Salad', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH2', diet: 'Veg', meal_type: 'snack', ingredients: 'apple, banana', verified: 'yes' },
   ];
-  const rankFn = async (cands: any[]) => ({ order: [1, 0], reasons: { 1: 'lighter option' } });
+  // candidates are shuffled before ranking, so the stub must locate by name
+  const rankFn = async (cands: any[]) => {
+    const fi = cands.findIndex((c) => c.recipe_name === 'Fruit Salad');
+    const order = [fi, ...cands.map((_, i) => i).filter((i) => i !== fi)];
+    return { order, reasons: { [fi]: 'lighter option' } };
+  };
   const r = await pickForMe({}, 'something light', rows as any, {}, rankFn);
   assert.equal(r.usedAI, true);
   assert.equal(r.picks[0].name, 'Fruit Salad');
   assert.match(r.noteInfo, /ranked by meaning/);
   assert.equal(r.count, 2, 'no zeroing when AI can interpret');
+});
+
+test('no-repeat emptied the pool: message says why, not a bare zero', async () => {
+  const rows = [
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH1', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal', verified: 'yes' },
+  ];
+  const r = await pickForMe({}, '', rows as any, { HHHHHHHHHH1: true });
+  assert.equal(r.count, 0);
+  assert.match(r.note, /already suggested in the last 30 days/);
+  assert.doesNotMatch(r.note, /no filler/);
+  assert.doesNotMatch(r.noteInfo, /ranked by meaning\./);
 });
