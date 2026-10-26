@@ -26,6 +26,20 @@ change; the PR description must show they were followed.
 - Failed checks block release. No merge while any required check is failing -
   no exceptions without the owner's explicit say-so on that specific case.
 
+## Deployment discipline
+
+- Batch changes: group edits into few commits and few deployments. Many small
+  commits each trigger a build (branch commits included - preview deployments
+  are on), and the free plan allows 100 deployments per day; on 2026-10-26 we
+  exhausted it and shipping stopped for ~24h.
+- Before calling the release pipeline broken, read the actual check status on
+  the commit (the Vercel check names quota and build failures explicitly).
+  Root cause first, never guess.
+- Never upgrade to a paid plan or change account settings without the owner's
+  explicit approval.
+- Never claim a fix is tested or live before the exact production deployment
+  serving it has been verified in a browser, naming the live commit.
+
 ## Documentation
 
 - `architecture.md` must be updated in the same squash-merged change as any
