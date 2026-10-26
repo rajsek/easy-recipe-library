@@ -30,8 +30,8 @@ let artError = '';
 function loadArtifact(): boolean {
   if (art !== undefined) return art !== null;
   try {
-    const here = path.dirname(fileURLToPath(import.meta.url));
-    const raw = readFileSync(path.join(here, 'demo-embeddings.json'), 'utf8');
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    const raw = readFileSync(path.join(__dirname, 'demo-embeddings.json'), 'utf8');
     art = JSON.parse(raw);
     if (art!.vectors_b64_i8) {
       const q = new Int8Array(Buffer.from(art!.vectors_b64_i8, 'base64').buffer);
