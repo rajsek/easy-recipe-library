@@ -45,8 +45,9 @@ export function dietClass(diet?: string): 'veg' | 'nonveg' | 'unknown' {
  *  - "no X" / "without X" / "avoid X" -> hard-exclude recipes whose name or
  *    ingredient list contains X
  *  - other plain words -> HARD requirement: only recipes whose name or
- *    ingredient list mentions the word qualify. If none do, the result is
- *    an honest zero, never unrelated filler.
+ *    ingredient list contains the word (whole-word, so 'breadless' does
+ *    NOT satisfy 'bread') qualify. If none do, the result is an honest
+ *    zero, never unrelated filler.
  * A note we cannot parse into keywords is ignored and reported as ignored.
  * No semantic claims are made - that needs the opt-in AI ranker.
  */
@@ -54,6 +55,10 @@ const NOTE_STOP = new Set(('the a an and or for with without something anything 
   'like love make made dish dishes recipe recipes food some that this these those today tonight kids kid ' +
   'friendly style type eat eating have get give show pick ideas idea will would shall should can could ' +
   'may might must just really very also still even ever never any every too yet').split(' '));
+
+function wordRe(term: string): RegExp {
+  return new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+}
 
 export function parseNote(note: string): { exclusions: string[]; keywords: string[] } {
   const exclusions: string[] = [];
@@ -155,8 +160,8 @@ export async function pickForMe(
   const parts: string[] = [];
   if (parsed.exclusions.length > 0) {
     candidates = candidates.filter((r) => {
-      const hay = (r.recipe_name + ' ' + (r.ingredients || '')).toLowerCase();
-      return !parsed.exclusions.some((x) => hay.indexOf(x) !== -1);
+      const hay = r.recipe_name + ' ' + (r.ingredients || '');
+      return !parsed.exclusions.some((x) => wordRe(x).test(hay));
     });
     parts.push('excluded recipes containing ' + parsed.exclusions.map((x) => '"' + x + '"').join(', '));
   }
@@ -165,8 +170,8 @@ export async function pickForMe(
     // not mention it is wrong, never "close enough". AI ranking, when on,
     // only re-orders whatever survives this filter.
     const matched = candidates.filter((r) => {
-      const hay = (r.recipe_name + ' ' + (r.ingredients || '')).toLowerCase();
-      return parsed.keywords.some((k) => hay.indexOf(k) !== -1);
+      const hay = r.recipe_name + ' ' + (r.ingredients || '');
+      return parsed.keywords.some((k) => wordRe(k).test(hay));
     });
     if (matched.length > 0) {
       candidates = matched;
