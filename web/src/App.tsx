@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; diet: string; published: string; status: string; }
 interface Recipe { name: string; url: string; channel: string; diet: string; meal: string; time: string; ingredients: string; steps: string[]; source: string; partial: boolean; }
 interface HistoryEntry { date: string; id: string; title: string; state: string; }
-interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: string; interpreted?: { from: string; to: string }[]; picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[]; }
+interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: string; interpreted?: { from: string; to: string }[]; picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[]; videos?: { video_id: string; title: string; url: string; channel: string; diet: string; status: string }[]; }
 
 // All /api calls go through apiFetch: it attaches the saved app token and,
 // on 401, drops the token and asks the app to show the unlock form again.
@@ -524,7 +524,7 @@ export default function App() {
                     'Meal pick request from my recipe app:\n' +
                     'Diet: ' + (pdiet || 'Veg + Non-veg') + '\n' +
                     'Meal: ' + (pmeal || 'any') +
-                    (pnote.trim() ? '\nNote: ' + pnote.trim() : '') +
+                    (composedNote() ? '\nNote: ' + composedNote() : '') +
                     '\nPlease pick from my recipe library.'
                   )}
                   target="_blank" rel="noopener"
@@ -587,6 +587,23 @@ export default function App() {
                   {p.reason && <p>{p.reason}</p>}
                   <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
                   <ActionButtons id={videoId(p.url)} title={p.name} onSaved={loadHistory} />
+                </div>
+              </article>
+            ))}
+            {(pickResult.videos || []).length > 0 && (
+              <p className="muted span-all">Only {pickResult.picks.length} checked {pickResult.picks.length === 1 ? 'recipe matches' : 'recipes match'}. Videos below are full-library matches whose ingredients and steps are not extracted yet:</p>
+            )}
+            {(pickResult.videos || []).map((v) => (
+              <article className="card" key={v.video_id}>
+                <a className="thumb" href={v.url} target="_blank" rel="noopener">
+                  <img src={thumb(v.url)} loading="lazy" alt="" />
+                  <span className="play">▶</span>
+                </a>
+                <div className="cardbody">
+                  <h3>{v.title}</h3>
+                  <p className="muted small">{v.channel}{v.diet ? ' · ' + v.diet : ''}</p>
+                  <p className="muted small">{v.status}</p>
+                  <a className="btn ghost" href={v.url} target="_blank" rel="noopener">Watch video</a>
                 </div>
               </article>
             ))}
