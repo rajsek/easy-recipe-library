@@ -44,14 +44,16 @@ export function dietClass(diet?: string): 'veg' | 'nonveg' | 'unknown' {
  * conservative keyword rules, and the result says exactly what happened:
  *  - "no X" / "without X" / "avoid X" -> hard-exclude recipes whose name or
  *    ingredient list contains X
- *  - other plain words -> deterministic score boost (name match beats
- *    ingredient/meal/time match)
+ *  - other plain words -> HARD requirement: only recipes whose name or
+ *    ingredient list mentions the word qualify. If none do, the result is
+ *    an honest zero, never unrelated filler.
  * A note we cannot parse into keywords is ignored and reported as ignored.
  * No semantic claims are made - that needs the opt-in AI ranker.
  */
 const NOTE_STOP = new Set(('the a an and or for with without something anything me my we us our please want ' +
   'like love make made dish dishes recipe recipes food some that this these those today tonight kids kid ' +
-  'friendly style type eat eating have get give show pick ideas idea').split(' '));
+  'friendly style type eat eating have get give show pick ideas idea will would shall should can could ' +
+  'may might must just really very also still even ever never any every too yet').split(' '));
 
 export function parseNote(note: string): { exclusions: string[]; keywords: string[] } {
   const exclusions: string[] = [];
@@ -146,41 +148,43 @@ export async function pickForMe(
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
 
-  let chosen = candidates.slice(0, 5);
   let usedAI = false;
   let noteInfo = '';
+  let noteZeroMatch = false;
+  const parsed = note && note.trim() ? parseNote(note) : { exclusions: [] as string[], keywords: [] as string[] };
+  const parts: string[] = [];
+  if (parsed.exclusions.length > 0) {
+    candidates = candidates.filter((r) => {
+      const hay = (r.recipe_name + ' ' + (r.ingredients || '')).toLowerCase();
+      return !parsed.exclusions.some((x) => hay.indexOf(x) !== -1);
+    });
+    parts.push('excluded recipes containing ' + parsed.exclusions.map((x) => '"' + x + '"').join(', '));
+  }
+  if (parsed.keywords.length > 0) {
+    // An explicit word in the note is a HARD requirement: a pick that does
+    // not mention it is wrong, never "close enough". AI ranking, when on,
+    // only re-orders whatever survives this filter.
+    const matched = candidates.filter((r) => {
+      const hay = (r.recipe_name + ' ' + (r.ingredients || '')).toLowerCase();
+      return parsed.keywords.some((k) => hay.indexOf(k) !== -1);
+    });
+    if (matched.length > 0) {
+      candidates = matched;
+      parts.push('showing only recipes whose name or ingredients match ' + parsed.keywords.map((k) => '"' + k + '"').join(', '));
+    } else {
+      candidates = [];
+      noteZeroMatch = true;
+      parts.push('no verified recipe matches ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' under these filters - nothing filled in; try fewer filters or a different note');
+    }
+  }
   if (note && note.trim() && !rankFn) {
-    const { exclusions, keywords } = parseNote(note);
-    const parts: string[] = [];
-    if (exclusions.length > 0) {
-      candidates = candidates.filter((r) => {
-        const hay = (r.recipe_name + ' ' + (r.ingredients || '')).toLowerCase();
-        return !exclusions.some((x) => hay.indexOf(x) !== -1);
-      });
-      parts.push('excluded recipes containing ' + exclusions.map((x) => '"' + x + '"').join(', '));
-    }
-    if (keywords.length > 0 && candidates.length > 0) {
-      const scored = candidates.map((r, idx) => {
-        const name = r.recipe_name.toLowerCase();
-        const body = ((r.meal_type || '') + ' ' + (r.ingredients || '') + ' ' + (r.time_notes || '')).toLowerCase();
-        let s = 0;
-        for (const k of keywords) {
-          if (name.indexOf(k) !== -1) s += 2;
-          else if (body.indexOf(k) !== -1) s += 1;
-        }
-        return { r, idx, s };
-      });
-      if (scored.some((x) => x.s > 0)) {
-        scored.sort((a, b) => b.s - a.s || a.idx - b.idx);
-        candidates = scored.map((x) => x.r);
-        parts.push('prioritized matches for ' + keywords.map((k) => '"' + k + '"').join(', '));
-      }
-    }
     noteInfo = parts.length > 0
       ? 'Your note was applied with simple keyword matching (AI ranking is off): ' + parts.join('; ') + '.'
       : 'Your note ("' + note.trim().slice(0, 60) + '") could not be applied - free-text wishes need AI ranking, which is off. Picks below are standard unranked matches.';
-    chosen = candidates.slice(0, 5);
+  } else if (note && note.trim() && parts.length > 0) {
+    noteInfo = 'Note constraints applied before ranking: ' + parts.join('; ') + '.';
   }
+  let chosen = candidates.slice(0, 5);
   if (rankFn && candidates.length > 0) {
     try {
       const { order, reasons } = await rankFn(candidates, filter, note);
@@ -200,7 +204,7 @@ export async function pickForMe(
     count: chosen.length,
     usedAI,
     noteInfo,
-    note: chosen.length < 5 ? `Only ${chosen.length} verified recipes qualify right now - no filler added.` : '',
+    note: chosen.length < 5 && !noteZeroMatch ? `Only ${chosen.length} verified recipes qualify right now - no filler added.` : '',
     picks: chosen.map((r: any) => ({
       name: r.recipe_name, url: r.video_url, time: r.time_notes || '',
       diet: r.diet || '', meal: r.meal_type || '', reason: r._reason || ''
