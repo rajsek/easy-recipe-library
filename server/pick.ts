@@ -121,10 +121,11 @@ export async function pickForMe(
   excluded: Record<string, true>,
   rankFn?: RankFn
 ): Promise<PickResult> {
+  let blockedByHistory = 0;
   let candidates = recipes.filter((r) => {
     if (String(r.verified).toLowerCase() !== 'yes') return false;
     const id = videoIdOf(r.video_url);
-    if (excluded[id]) return false;
+    if (excluded[id]) { blockedByHistory++; return false; }
     // 'Non-veg' means anything not strictly Veg (catches 'Egg', 'Contains egg',
     // 'Chicken'...); 'Veg' stays strict - egg dishes are not vegetarian here.
     // 'Veg' is strict; 'Non-veg' means an explicitly confirmed egg/meat
@@ -213,12 +214,20 @@ export async function pickForMe(
     }
   }
 
+  // When the no-repeat rule is what emptied the pool, say so plainly - a
+  // bare "0 qualify" would read like the library has nothing at all.
+  let finalNote = chosen.length < 5 && !noteZeroMatch ? `Only ${chosen.length} verified recipes qualify right now - no filler added.` : '';
+  if (chosen.length === 0 && !noteZeroMatch && blockedByHistory > 0) {
+    finalNote = 'Every verified recipe under these filters was already suggested in the last 30 days - those ideas come back after that. Try a different filter, or ask for more recipes to be added.';
+    noteInfo = noteInfo.replace(/, so the note was ranked by meaning/, ' directly, but nothing new was left to rank');
+  }
+
   const ids = chosen.map((r) => videoIdOf(r.video_url));
   return {
     count: chosen.length,
     usedAI,
     noteInfo,
-    note: chosen.length < 5 && !noteZeroMatch ? `Only ${chosen.length} verified recipes qualify right now - no filler added.` : '',
+    note: finalNote,
     picks: chosen.map((r: any) => ({
       name: r.recipe_name, url: r.video_url, time: r.time_notes || '',
       diet: r.diet || '', meal: r.meal_type || '', reason: r._reason || ''
