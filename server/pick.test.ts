@@ -188,7 +188,8 @@ test('AI on + keyword nothing mentions: ranker interprets the note instead of ze
     const order = [fi, ...cands.map((_, i) => i).filter((i) => i !== fi)];
     return { order, reasons: { [fi]: 'lighter option' } };
   };
-  const r = await pickForMe({}, 'something light', rows as any, {}, rankFn);
+  const classifyFn = async () => ({ light: 'mood' as const });
+  const r = await pickForMe({}, 'something light', rows as any, {}, rankFn, classifyFn);
   assert.equal(r.usedAI, true);
   assert.equal(r.picks[0].name, 'Fruit Salad');
   assert.match(r.noteInfo, /ranked by meaning/);
@@ -204,4 +205,48 @@ test('no-repeat emptied the pool: message says why, not a bare zero', async () =
   assert.match(r.note, /already suggested in the last 30 days/);
   assert.doesNotMatch(r.note, /no filler/);
   assert.doesNotMatch(r.noteInfo, /ranked by meaning\./);
+});
+
+const hardRows = [
+  { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH1', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal, oil', verified: 'yes' },
+  { recipe_name: 'Fruit Salad', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH2', diet: 'Veg', meal_type: 'snack', ingredients: 'apple, banana', verified: 'yes' },
+];
+const moodRank: any = async (cands: any[]) => ({ order: cands.map((_, i) => i), reasons: {} });
+
+test('unmatched FOOD word stays a hard constraint even with AI on ("with tofu")', async () => {
+  const classifyFn = async () => ({ tofu: 'food' as const });
+  const r = await pickForMe({}, 'with tofu', hardRows as any, {}, moodRank, classifyFn);
+  assert.equal(r.count, 0, 'tofu is an ingredient: honest zero, never unrelated fallback');
+  assert.match(r.noteInfo, /no verified recipe matches "tofu"/);
+});
+
+test('unmatched FOOD word stays hard ("using pasta")', async () => {
+  const classifyFn = async () => ({ pasta: 'food' as const });
+  const r = await pickForMe({}, 'using pasta', hardRows as any, {}, moodRank, classifyFn);
+  assert.equal(r.count, 0);
+  assert.match(r.noteInfo, /"pasta"/);
+});
+
+test('mixed mood + unmatched ingredient still zeros on the ingredient', async () => {
+  const classifyFn = async () => ({ light: 'mood' as const, pasta: 'food' as const });
+  const r = await pickForMe({}, 'light pasta', hardRows as any, {}, moodRank, classifyFn);
+  assert.equal(r.count, 0);
+});
+
+test('classifier failure is conservative: zero, not semantic fallback', async () => {
+  const classifyFn = async () => { throw new Error('provider down'); };
+  const r = await pickForMe({}, 'something light', hardRows as any, {}, moodRank, classifyFn);
+  assert.equal(r.count, 0);
+  assert.match(r.noteInfo, /no verified recipe matches "light"/);
+});
+
+test('exclusions are hard regardless of classifier ("no peanut", "without milk")', async () => {
+  const rows = [
+    { recipe_name: 'Peanut Chutney', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH3', diet: 'Veg', meal_type: 'side', ingredients: 'peanut, chilli', verified: 'yes' },
+    { recipe_name: 'Fruit Salad', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH2', diet: 'Veg', meal_type: 'snack', ingredients: 'apple, banana, milk', verified: 'yes' },
+  ];
+  const r1 = await pickForMe({}, 'no peanut', rows as any, {}, moodRank, async () => ({}));
+  assert.ok(!r1.picks.some((p) => /peanut/i.test(p.name)), 'peanut excluded');
+  const r2 = await pickForMe({}, 'without milk', rows as any, {}, moodRank, async () => ({}));
+  assert.ok(!r2.picks.some((p) => /milk/i.test(p.name)), 'milk excluded');
 });
