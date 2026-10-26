@@ -501,3 +501,55 @@ export async function pickForMe(
     ids
   };
 }
+
+/** Prose words that appear in ingredient text but are not ingredients:
+ * excluded from the typeahead vocabulary (chips must be canonical foods). */
+const TYPEAHEAD_STOP = new Set(('about added adds add after again against ahead almost along although always among amount another approximately around aroma avoid ' +
+  'before below besides better bring brings broken chef choice claim claims cooked cooking cover cube cubes depending ' +
+  'finely fresh freshly grind ground heat heated heaped instead keep keeps large little loosely made make makes medium ' +
+  'needed needs note optional other others over piece pieces prefer preference required roughly serve serves serving ' +
+  'aside baking base small soak soaked soft soften store stored taste thick thin tightly together total usually very water well whole your').split(' '));
+
+/** Canonical multi-word ingredient phrases recognised when they appear in the
+ * verified library's ingredient text. Used for the typeahead vocabulary so
+ * chips can offer "garam masala", not just "garam". Extend deliberately. */
+const INGREDIENT_PHRASES = [
+  'garam masala', 'chilli powder', 'chili powder', 'red chilli', 'green chilli', 'green chillies',
+  'coriander leaves', 'coriander powder', 'mint leaves', 'curry leaves', 'curry powder',
+  'cumin powder', 'cumin seeds', 'turmeric powder', 'pepper powder', 'black pepper',
+  'chaat masala', 'amchur powder', 'kashmiri red chilli', 'mustard seeds', 'fennel seeds',
+  'coconut milk', 'coconut oil', 'sesame oil', 'olive oil', 'vegetable oil', 'sunflower oil',
+  'ginger garlic paste', 'garlic cloves', 'spring onion', 'green peas', 'chickpea flour',
+  'besan flour', 'rice flour', 'corn flour', 'whole wheat', 'all purpose flour',
+  'condensed milk', 'lemon juice', 'tomato ketchup', 'soy sauce',
+  'cream cheese', 'processed cheese', 'mozzarella cheese', 'cheese slice',
+  'boiled potato', 'sweet corn', 'baby corn', 'bell pepper', 'french beans',
+  'jaggery powder', 'cardamom powder', 'saffron strands', 'cashew nuts',
+];
+
+/** Canonical ingredient vocabulary for the typeahead: multi-word phrases found
+ * in verified ingredient text plus single words from ingredientVocab, with
+ * single words dropped when they appear ONLY inside a recognised phrase.
+ * Deterministic, no AI, derived only from the verified library. */
+export function typeaheadVocab(recipes: RecipeRow[]): string[] {
+  const texts = recipes
+    .filter((r) => String(r.verified).toLowerCase() === 'yes')
+    .map((r) => ' ' + String(r.ingredients || '').toLowerCase() + ' ');
+  const joined = texts.join('');
+  const count = (term: string) => (joined.match(new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g')) || []).length;
+  const phrases = new Set<string>();
+  for (const p of new Set(INGREDIENT_PHRASES)) {
+    if (count(p) > 0) phrases.add(p);
+  }
+  const singles = new Set(ingredientVocab(recipes).filter((w) => !TYPEAHEAD_STOP.has(w)));
+  for (const ph of phrases) {
+    for (const part of ph.split(' ')) {
+      if (!singles.has(part)) continue;
+      const wordTotal = count(part);
+      let inside = 0;
+      for (const q of phrases) if (q.indexOf(part) !== -1) inside += count(q);
+      if (wordTotal > 0 && inside >= wordTotal) singles.delete(part);
+    }
+  }
+  return [...phrases, ...singles].sort();
+}
