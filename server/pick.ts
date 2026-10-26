@@ -406,7 +406,8 @@ export async function pickForMe(
 ): Promise<PickResult> {
   let blockedByHistory = 0;
   let blockedBySeen = 0;
-  let candidates = filterCandidateRecipes(recipes, filter).filter((r) => {
+  const beforeHistory = filterCandidateRecipes(recipes, filter);
+  let candidates = beforeHistory.filter((r) => {
     const id = videoIdOf(r.video_url);
     if (excluded[id]) { blockedByHistory++; return false; }
     if (seenIds && seenIds[id]) { blockedBySeen++; return false; }
@@ -465,9 +466,21 @@ export async function pickForMe(
     if (candidates.length === 0 && beforeDish > 0) {
       dishZeroed = true;
       noteZeroMatch = true;
-      parts.push('no checked recipe name matches the selected ' + (dishSel.length > 1 ? 'dishes' : 'dish') +
-        ' under the current filters (' + beforeDish + ' other ' + (beforeDish === 1 ? 'recipe' : 'recipes') +
-        ' qualified before the dish filter). Nothing filled in from elsewhere');
+      const dishMatches = beforeHistory.filter((r) => dishSel.some((d) =>
+        d.toLowerCase().split(/\s+/).every((w) => hasIngredientWord(r.recipe_name || '', w))));
+      const repeats = dishMatches.filter((r) => excluded[videoIdOf(r.video_url)]);
+      const alreadySeen = dishMatches.filter((r) => !excluded[videoIdOf(r.video_url)] && seenIds?.[videoIdOf(r.video_url)]);
+      if (repeats.length + alreadySeen.length === dishMatches.length && dishMatches.length > 0) {
+        parts.push(dishMatches.length + ' checked ' + (dishMatches.length === 1 ? 'recipe matches' : 'recipes match') +
+          ' the selected dish under the diet/meal filters, but ' +
+          [repeats.length ? repeats.length + ' already suggested in the last 30 days' : '',
+            alreadySeen.length ? alreadySeen.length + ' already shown in this list' : ''].filter(Boolean).join(' and ') +
+          ': ' + dishMatches.map((r) => r.recipe_name).join('; ') + '. Nothing filled in from elsewhere');
+      } else {
+        parts.push('no checked recipe name matches the selected ' + (dishSel.length > 1 ? 'dishes' : 'dish') +
+          ' under the current filters (' + beforeDish + ' other ' + (beforeDish === 1 ? 'recipe' : 'recipes') +
+          ' qualified before the dish filter). Nothing filled in from elsewhere');
+      }
     }
   }
   if (kwN.words.length > 0 && !dishZeroed) {
