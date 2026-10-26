@@ -4,12 +4,14 @@ This file describes how the app is put together. It is updated in the same
 commit as any architecture change, keeping section headings and diagram node
 IDs stable so `git diff` shows exactly what each change touched.
 
-## Current state (as of 2026-10-26 ~20:00 IST; production = deployment of 112bc52)
+## Current state (as of 2026-10-26 ~20:30 IST; production = deployment of 64088bb)
 
 Live on Vercel (Hobby, free tier), demo-snapshot mode. PRODUCTION currently serves
-deployment of commit 112bc52: 60 cards (59 verified + 1 partial) + 4468-video index.
-The repo main is newer (62 cards, AND note semantics, staged zero-reasons, multi-chip
-typeahead) and AWAITS its build; "State" below says Live only for what production
+deployment of commit 64088bb: 62 cards (61 verified + 1 partial) + 4468-video index,
+AND note semantics, staged zero-reasons, and the multi-chip typeahead UI (64088bb is
+the useRef hotfix that restored the page after the blank-screen incident; the npm
+build now runs tsc --noEmit before vite). The repo main is newer (chips-only Ask
+button fix) and AWAITS its build; "State" below says Live only for what production
 actually serves. Saves/history are per-instance memory and reset on restart.
 
 ## Request flow (diagram)
@@ -43,14 +45,14 @@ flowchart LR
 | ID | Component | Role | State |
 | --- | --- | --- | --- |
 | web-ui | React app (Vite build) | Filters, picks, ask, history, comms | Live |
-| guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool | Live in production as of 112bc52 with OR note semantics + older zero wording; AND semantics, question-word guard and staged zero-reasons committed on main, awaiting deploy |
+| guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool | Live in production (64088bb): AND semantics, question-word guard, staged zero-reasons |
 | session-store | In-memory ask sessions (server/session.ts) | 30-min TTL; follow-ups like "another option" reuse stored diet/meal and hide what was just shown; reset via "New conversation" | Live (resets on restart) |
 | semantic-cache | Answer reuse (server/semantic.ts) | A repeat question with the SAME constraints + library + intent is answered with 0 AI calls; "another option" and any constraint change bypass it | Live |
 | rag-retrieval | Full-corpus retrieval (server/rag.ts) | Top video-index matches join the shortlist, labelled "video found - details not extracted yet"; details are never invented | Live (verified 2026-10-26 19:47 IST: production /api/state rag.ready=true with 4468 titles; a paneer ask returned 3 checked cards + 2 labelled video suggestions) |
 | minilm-matcher | Local matching model (Xenova/all-MiniLM-L6-v2, pinned revision, Apache-2.0) | Turns question + titles into number patterns for meaning matching and the answer cache. Runs inside the app server; question/recipe text never leaves for matching. Pluggable: `SEMANTIC=off` disables it and the app falls back to plain word rules, honestly labelled | Live, optional |
 | groq-answerer | Groq chat API (openai/gpt-oss-120b) | Writes the answer from the shortlist only; cited recipes are validated server-side, one corrective retry then honest reject | Live |
-| snapshot-data | server/demo-data.json | Dated public video-derived copy of the library; private history never published | Live in production: 60 cards (59 verified + 1 partial); repo main: 62 cards (61 verified + 1 partial, 2026-10-26) awaiting deploy |
-| ingredient-typeahead | server/pick.ts typeaheadVocab + /api/ingredients + chips UI | Canonical ingredient words from the checked library (curated 141-word allowlist); tap/keyboard multi-select composed into ask + pick notes; zero AI per keystroke | Live in production: /api/ingredients endpoint only (112bc52); chips UI + allowlist + multi-select committed on main, awaiting deploy |
+| snapshot-data | server/demo-data.json | Dated public video-derived copy of the library; private history never published | Live in production (64088bb): 62 cards (61 verified + 1 partial, 2026-10-26) |
+| ingredient-typeahead | server/pick.ts typeaheadVocab + /api/ingredients + chips UI | Canonical ingredient words from the checked library (curated 141-word allowlist); tap/keyboard multi-select composed into ask + pick notes; zero AI per keystroke | Live in production (64088bb): vocab endpoint + chips UI + allowlist + multi-select |
 | embeddings-index | server/demo-embeddings.json | Precomputed MiniLM vectors (int8) for all 4468 video titles; regenerated with each snapshot refresh | Live (bundling fixed by literal-__dirname tracing in 69315b9; verified with rag-retrieval) |
 | live-sheet | Private Google Sheet | Source of truth for recipes, history, traces | Planned (needs account connection) |
 | doc-bridge | Shared Google Doc | Chat bridge to the assistant | Disabled (notification unproven) |
@@ -106,6 +108,9 @@ Newest first. SHAs are real commits on main.
 
 | Date (IST) | Commit(s) | What changed |
 | --- | --- | --- |
+| 2026-10-26 20:23 | 3208a7f | web-ui: selected ingredient chips alone enable the Ask button (chips-only ask); committed, awaiting deploy |
+| 2026-10-26 20:19 | e06f312 | build: npm run build runs tsc --noEmit -p web before vite so a missing import fails the build instead of shipping a blank page; committed, awaiting deploy |
+| 2026-10-26 20:19 | 64088bb | web-ui hotfix: import useRef (blank-screen ReferenceError); deployed and live-verified (renders, 62 cards, AND pick, zero-reason, console clean, mobile) |
 | 2026-10-26 19:57 | 7c091b5 | snapshot-data: 62 cards (61 verified + 1 partial), +2 paneer cards, 7 paneer video extraction statuses |
 | 2026-10-26 19:56 | f81abc3, 4fb5f27, e076c65, 1707524 | guardrails: food words combine as AND; question words never interpreted as ingredients ("what" is not "wheat"); zero answers name the real cause with counts; honest-zero asks also offer labelled video alternatives |
 | 2026-10-26 19:47 | 69315b9, 357baa5 | rag-retrieval + embeddings-index live-verified (production deployment of 112bc52; rag.ready=true, 4468 titles) |
