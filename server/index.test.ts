@@ -93,3 +93,21 @@ test('session reset clears stored context', async () => {
   const { json } = await ask({ question: 'another option', session_id: 'testsession0003' });
   assert.equal(json.session.continued, false, 'no continuation after reset');
 });
+
+test('pick fills a thin checked pool with labelled video alternatives', async () => {
+  const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.ok(Array.isArray(j.picks), 'picks array');
+  assert.ok(Array.isArray(j.videos), 'videos array always present on pick');
+  assert.ok(j.picks.length >= 1, 'corn matches at least one checked recipe');
+  assert.ok(j.picks.some((p: any) => /corn/i.test(p.name)), 'the corn card is picked');
+  assert.ok(j.videos.length <= Math.max(0, 5 - j.picks.length), 'video fill never exceeds the 5 idea budget');
+  const ids = new Set<string>();
+  for (const v of j.videos) {
+    assert.equal(v.status, 'video found - details not extracted yet', 'video alternatives stay honestly labelled');
+    assert.ok(!ids.has(v.video_id), 'video alternatives have unique ids');
+    ids.add(v.video_id);
+    assert.ok(!j.picks.some((p: any) => String(p.url).includes(v.video_id)), 'no alternative duplicates a picked card');
+  }
+});
