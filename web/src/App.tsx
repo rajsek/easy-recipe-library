@@ -236,12 +236,16 @@ export default function App() {
   };
   const [channels, setChannels] = useState<string[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [ingVocab, setIngVocab] = useState<string[]>([]);
+  const [taOpen, setTaOpen] = useState(false);
+  const [taIndex, setTaIndex] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [dataMode, setDataMode] = useState<string>('');
   const [locked, setLocked] = useState(false);
   const [videos, setVideos] = useState<VideoItem[] | null>(null);
   const [fch, setFch] = useState(''); const [fdiet, setFdiet] = useState(''); const [fq, setFq] = useState('');
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
+  const noteInputRef = useRef<HTMLInputElement>(null);
   const [pickResult, setPickResult] = useState<PickResult | null>(null);
   const [picking, setPicking] = useState(false);
   const [askMode, setAskMode] = useState<'ai' | 'whatsapp'>('ai');
@@ -268,6 +272,7 @@ export default function App() {
 
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
+    apiFetch('/api/ingredients').then((r) => r.json()).then((j) => setIngVocab(j.ingredients || [])).catch(() => {});
   }, []);
 
   const loadTraces = useCallback(() => {
@@ -296,6 +301,35 @@ export default function App() {
     apiFetch('/api/videos?' + params).then((r) => r.json()).then(setVideos).catch(() => setVideos([]));
   }, [tab, fch, fdiet, fq]);
 
+  // Ingredient typeahead: canonical chips from the verified library vocabulary
+  // (fetched once from /api/ingredients - zero AI calls per keystroke). Unknown
+  // words are still allowed as free text; the answer says honestly when the
+  // library has no match under the current filters.
+  function taCurrentToken(): { start: number; token: string } {
+    const el = noteInputRef.current;
+    const pos = el ? el.selectionStart ?? pnote.length : pnote.length;
+    const left = pnote.slice(0, pos);
+    const m = left.match(/([a-zA-Z ]*?)$/);
+    const token = (m ? m[1] : '').replace(/^\s+/, '');
+    return { start: pos - token.length, token };
+  }
+  function taMatches(): string[] {
+    const { token } = taCurrentToken();
+    const t = token.trim().toLowerCase();
+    if (t.length < 2) return [];
+    const prefix = ingVocab.filter((v) => v.startsWith(t));
+    const inner = ingVocab.filter((v) => !v.startsWith(t) && v.indexOf(t) !== -1);
+    return [...prefix, ...inner].slice(0, 6);
+  }
+  function taPick(choice: string) {
+    const { start } = taCurrentToken();
+    const el = noteInputRef.current;
+    const pos = el ? el.selectionStart ?? pnote.length : pnote.length;
+    const next = pnote.slice(0, start) + choice + pnote.slice(pos);
+    setPnote(next); setTaOpen(false); setTaIndex(0);
+    requestAnimationFrame(() => { const e2 = noteInputRef.current; if (e2) { e2.focus(); const c = start + choice.length; e2.setSelectionRange(c, c); } });
+  }
+  const taList = taOpen ? taMatches() : [];
   async function doAskAi() {
     setAskAiState('sending'); setAskAiError(''); setAskAiResult(null);
     const q = pnote.trim(); const d = pdiet; const m = pmeal;
@@ -395,7 +429,25 @@ export default function App() {
             <p className="muted small">{dataMode === 'demo'
               ? 'Suggestions come only from checked recipes in a snapshot copy of your library (refreshed by the owner when the Sheet changes). Repeats are avoided only while this copy\'s memory lasts - it resets without warning.'
               : 'Suggestions come only from checked recipes, never repeated within 30 days.'}</p>
-            <input placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote} onChange={(e) => setPnote(e.target.value)} />
+            <input ref={noteInputRef} placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote}
+              onChange={(e) => { setPnote(e.target.value); setTaOpen(true); setTaIndex(0); }}
+              onKeyDown={(e) => {
+                if (!taOpen || taList.length === 0) return;
+                if (e.key === 'ArrowDown') { e.preventDefault(); setTaIndex((taIndex + 1) % taList.length); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setTaIndex((taIndex - 1 + taList.length) % taList.length); }
+                else if ((e.key === 'Enter' || e.key === 'Tab') && taList[taIndex]) { e.preventDefault(); taPick(taList[taIndex]); }
+                else if (e.key === 'Escape') { setTaOpen(false); }
+              }}
+              onBlur={() => setTimeout(() => setTaOpen(false), 150)} />
+            {taList.length > 0 && (
+              <div className="tachips" role="listbox" aria-label="ingredient suggestions from your library">
+                {taList.map((v, i) => (
+                  <button key={v} type="button" role="option" aria-selected={i === taIndex}
+                    className={'tachip' + (i === taIndex ? ' active' : '')}
+                    onMouseDown={(e) => { e.preventDefault(); taPick(v); }}>{v}</button>
+                ))}
+              </div>
+            )}
             <div className="pickcontrols">
               <select value={pdiet} onChange={(e) => setPdiet(e.target.value)}>
                 <option value="">Veg + Non-veg</option><option value="Veg">Veg</option><option value="Non-veg">Non-veg</option>
