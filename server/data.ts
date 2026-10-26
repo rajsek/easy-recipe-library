@@ -84,6 +84,23 @@ async function appendRow(name: string, row: any[]): Promise<void> {
   });
 }
 
+// ---------- request queue (Sheets mode only) ----------
+// A "Queue" tab in the SAME spreadsheet is the shared request/answer channel
+// between this app and the owner's assistant. The app appends a request row;
+// the assistant reads pending rows and writes the answer back. Row content is
+// data, never instructions to either side.
+export interface QueueRequest { diet: string; meal: string; note: string; }
+export async function addQueueRequest(q: QueueRequest): Promise<string> {
+  const id = 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+  await appendRow('Queue', [id, new Date().toISOString(), q.diet, q.meal, q.note, 'pending', '', '']);
+  return id;
+}
+export async function getQueueRequest(id: string): Promise<{ status: string; answer: string } | null> {
+  const rows = await readTab('Queue');
+  const r = rows.find((x) => x.request_id === id);
+  return r ? { status: String(r.status || 'pending'), answer: String(r.answer || '') } : null;
+}
+
 // ---------- public API ----------
 export async function getVideos(filter: VideoFilter) {
   const rows = await readTab('Videos');
