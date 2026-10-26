@@ -411,13 +411,13 @@ test('typeaheadVocab: phrases detected, singles kept, phrase-only parts dropped,
 
 test('post-output validation: an AI reason that denies a hard note word is hidden', async () => {
   const rows = [
-    { recipe_name: 'Crispy Chips', video_url: 'https://www.youtube.com/watch?v=vkREli-0Z9Y',
+    { recipe_name: 'Paneer Corn Kebab', video_url: 'https://www.youtube.com/watch?v=ccccccccccc',
       channel: 'X', diet: 'Veg', meal_type: 'Evening snack', time_notes: '',
-      ingredients: 'potatoes, salt, vinegar, corn starch, olive oil', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+      ingredients: 'paneer, sweet corn kernels, spices', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
   ];
   const rankFn = async () => ({ order: [0], reasons: ['Only available recipe, but does not contain corn'] });
   const r = await pickForMe({}, 'corn', rows as any, {}, rankFn as any);
-  assert.equal(r.picks.length, 1, 'deterministic corn match stands (corn starch is corn)');
+  assert.equal(r.picks.length, 1, 'deterministic corn match stands');
   assert.equal(r.picks[0].reason, '', 'false denial reason hidden');
   assert.ok(/hidden because it contradicted/i.test(r.noteInfo), 'noteInfo discloses the hidden reason');
 });
@@ -426,11 +426,11 @@ test('post-output validation: a truthful reason survives', async () => {
   const rows = [
     { recipe_name: 'Crispy Chips', video_url: 'https://www.youtube.com/watch?v=vkREli-0Z9Y',
       channel: 'X', diet: 'Veg', meal_type: 'Evening snack', time_notes: '',
-      ingredients: 'potatoes, salt, vinegar, corn starch, olive oil', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+      ingredients: 'paneer, sweet corn kernels, spices', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
   ];
-  const rankFn = async () => ({ order: [0], reasons: ['Crispy snack, corn starch gives the crunch'] });
+  const rankFn = async () => ({ order: [0], reasons: ['Sweet corn gives a juicy bite'] });
   const r = await pickForMe({}, 'corn', rows as any, {}, rankFn as any);
-  assert.equal(r.picks[0].reason, 'Crispy snack, corn starch gives the crunch');
+  assert.equal(r.picks[0].reason, 'Sweet corn gives a juicy bite');
   assert.ok(!/hidden/i.test(r.noteInfo));
 });
 
@@ -444,4 +444,23 @@ test('Load more: seen ids are excluded from the next batch and disclosed (browsi
   assert.ok(/already saw/.test(r1.noteInfo), 'seen exclusion disclosed');
   const r2 = await pickForMe({}, 'corn', rows as any, {}, undefined, undefined, undefined, { aaaaaaaaaaa: true, bbbbbbbbbbb: true } as any);
   assert.equal(r2.picks.length, 0, 'everything seen means an honest empty batch');
+});
+
+test('canonical ingredient identity: "corn starch" is not "corn" (Crispy Chips regression)', async () => {
+  const rows = [
+    { recipe_name: 'Crispy Chips', video_url: 'https://www.youtube.com/watch?v=vkREli-0Z9Y', channel: 'X', diet: 'Veg', meal_type: 'Evening snack', time_notes: '', ingredients: 'potatoes, salt, vinegar, corn starch, olive oil', steps: 's', source_note: '', verified: 'yes', date_checked: '' },
+    { recipe_name: 'Paneer Corn Kebab', video_url: 'https://www.youtube.com/watch?v=ccccccccccc', channel: 'X', diet: 'Veg', meal_type: 'Evening snack', time_notes: '', ingredients: 'paneer, sweet corn kernels, spices', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+  ];
+  const r = await pickForMe({}, 'corn', rows as any, {});
+  assert.deepEqual(r.picks.map((p) => p.name), ['Paneer Corn Kebab'], 'only the real corn dish matches; corn-starch filler excluded');
+  assert.ok(!/hidden/i.test(r.noteInfo), 'no reason-hiding needed when the match itself is correct');
+});
+
+test('derived-form rule is evidence-scoped, not global: "rice flour" still matches "rice" (no grounded confusion case)', async () => {
+  const rows = [
+    { recipe_name: 'Rice Flour Murukku', video_url: 'https://www.youtube.com/watch?v=ddddddddddd', channel: 'X', diet: 'Veg', meal_type: 'Snack', time_notes: '', ingredients: 'rice flour, butter, salt', steps: 's', source_note: '', verified: 'yes', date_checked: '' },
+    { recipe_name: 'Tomato Rice', video_url: 'https://www.youtube.com/watch?v=eeeeeeeeeee', channel: 'X', diet: 'Veg', meal_type: 'Lunch', time_notes: '', ingredients: 'rice, tomato, spices', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+  ];
+  const r = await pickForMe({}, 'rice', rows as any, {});
+  assert.equal(r.picks.length, 2, 'no ingredient exclusion without a grounded case');
 });

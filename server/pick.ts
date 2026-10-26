@@ -64,6 +64,26 @@ export function wordRe(term: string): RegExp {
   return new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
 }
 
+// Canonical-ingredient identity: a DERIVED form of an ingredient is not the
+// ingredient itself - but ONLY where we have grounded evidence of the
+// confusion, not as a global assumption. Grounded case (2026-10-26 defect):
+// "corn starch/flour/syrup/oil" (spaced or hyphenated) are corn products,
+// and a potato chip listing corn starch is not an answer to "corn".
+// Other ingredients keep literal matching until a similar case is evidenced
+// (e.g. atta/wheat flour may well BE intended by "wheat" - unverified).
+const DERIVED_FORMS: Record<string, string[]> = {
+  corn: ['starch', 'flour', 'syrup', 'oil', 'meal']
+};
+export function hasIngredientWord(hay: string, term: string): boolean {
+  if (!wordRe(term).test(hay)) return false;
+  const derived = DERIVED_FORMS[term];
+  if (!derived) return true;
+  const esc = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const suffix = '(?:' + derived.join('|') + ')s?';
+  const stripped = hay.replace(new RegExp('\\b' + esc + '\\s*[- ]\\s*' + suffix + '\\b', 'gi'), ' ');
+  return wordRe(term).test(stripped);
+}
+
 // ---- bounded typo tolerance for note words ----
 // Source-backed spelling variants seen in Indian-English recipe writing.
 const NOTE_ALIASES: Record<string, string> = {
@@ -250,7 +270,7 @@ export function constrainAskCandidates(
     const hayOf = (r: RecipeRow) => r.recipe_name + ' ' + (r.ingredients || '');
     // Multiple food words are an AND: "onion paneer" means recipes with
     // BOTH, never a silent OR that shows onion-only or paneer-only dishes.
-    const hasEvery = (r: RecipeRow) => foodWords.every((k) => wordRe(k).test(hayOf(r)));
+    const hasEvery = (r: RecipeRow) => foodWords.every((k) => hasIngredientWord(hayOf(r), k));
     const matched = out.filter(hasEvery);
     if (matched.length === 0) {
       // Stage the pool so the reason names the REAL cause with deterministic
@@ -438,7 +458,7 @@ export async function pickForMe(
     const req = hard.length > 0 ? hard : kwN.words;
     const matched = candidates.filter((r) => {
       const hay = r.recipe_name + ' ' + (r.ingredients || '');
-      return hard.length > 0 ? req.every((k) => wordRe(k).test(hay)) : req.some((k) => wordRe(k).test(hay));
+      return hard.length > 0 ? req.every((k) => hasIngredientWord(hay, k)) : req.some((k) => hasIngredientWord(hay, k));
     });
     if (matched.length > 0) {
       candidates = matched;
