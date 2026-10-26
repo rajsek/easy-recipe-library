@@ -17,7 +17,7 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote } from './pick.js';
+import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab } from './pick.js';
 import { CommTrace, MemoryTraceStore } from './comm-trace.js';
 import { randomUUID } from 'node:crypto';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
@@ -169,10 +169,10 @@ app.post('/api/ask-ai', async (req, res) => {
     if (classifyFn && keywords.length > 0) {
       try { cls = await classifyFn(keywords); } catch { cls = {}; }
     }
-    const { candidates, zeroReason } = constrainAskCandidates(base, question, ex, cls);
+    const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, noteVocab(recipes as any));
     if (zeroReason) {
       await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer', handling: 'no candidates; no model call', status: 'ok' });
-      return res.json({ answer: 'No verified recipe in your library matches that under these filters - nothing invented to fill the gap. Try different words or fewer filters.', request_id: traceId });
+      return res.json({ answer: zeroReason, request_id: traceId, interpreted });
     }
     const { text, recipes: cited } = await askFn(candidates, question, { diet, meal });
     await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' verified candidates + question', reply_text: text, handling: 'filters: diet=' + (diet || 'any') + ' meal=' + (meal || 'any') + '; ' + cited.length + ' cited cards; status 200', status: 'ok' });
