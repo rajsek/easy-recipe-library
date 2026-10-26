@@ -21,56 +21,55 @@ test('filterCandidateRecipes: verified-only, Veg strict, Non-veg explicit, unkno
   assert.deepEqual(breakfast, ['Besan Bread Toast']);
 });
 
-test('ask answer with valid [[library names]] passes, markers stripped', async () => {
-  const chat = async () => 'Try [[Besan Bread Toast]] - quick and veg.';
+test('structured answer: valid ids return text + canonical recipe cards', async () => {
+  const chat = async () => '{"text":"Try **Besan Bread Toast** - quick and veg.","ids":[1]}';
   const out = await askWithValidation(chat, rows.slice(0, 1), 'quick snack?', {});
-  assert.equal(out, 'Try Besan Bread Toast - quick and veg.');
+  assert.equal(out.text, 'Try Besan Bread Toast - quick and veg.', 'markdown wrappers stripped from prose');
+  assert.deepEqual(out.recipes.map((r) => r.recipe_name), ['Besan Bread Toast'], 'canonical row resolved from the cited id');
 });
 
-test('ask answer referencing a NON-library recipe is retried, then rejected', async () => {
+test('structured answer: ids outside the candidate list are retried once, then rejected', async () => {
   let calls = 0;
-  const chat = async () => { calls++; return 'How about [[Chicken Tikka]] tonight?'; };
+  const chat = async () => { calls++; return '{"text":"How about Chicken Tikka?","ids":[9]}'; };
   await assert.rejects(
     askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {}),
-    /outside the library/,
-    'non-library reference must never reach the user'
+    /reference validation/,
+    'a reference the server cannot resolve must never reach the user'
   );
   assert.equal(calls, 2, 'one corrective retry before rejecting');
 });
 
-test('corrective retry succeeds when the model fixes its references', async () => {
+test('structured answer: non-JSON replies are retried once, then rejected', async () => {
   let calls = 0;
-  const chat = async () => (++calls === 1 ? 'Maybe [[Pasta Alfredo]]?' : 'Better: [[Besan Bread Toast]].');
-  const out = await askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {});
-  assert.equal(out, 'Better: Besan Bread Toast.');
+  const chat = async () => { calls++; return 'Just make pasta!'; };
+  await assert.rejects(askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {}), /reference validation/);
   assert.equal(calls, 2);
+});
+
+test('corrective retry succeeds when the model fixes its ids', async () => {
+  let calls = 0;
+  const chat = async () => (++calls === 1 ? '{"text":"Maybe pasta?","ids":[7]}' : '{"text":"Better: Besan Bread Toast.","ids":[1]}');
+  const out = await askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {});
+  assert.equal(out.text, 'Better: Besan Bread Toast.');
+  assert.equal(out.recipes.length, 1);
+  assert.equal(calls, 2);
+});
+
+test('structured answer: prose naming an uncited recipe carries no card', async () => {
+  const chat = async () => '{"text":"You could improvise a pizza, but from your library: Besan Bread Toast.","ids":[1]}';
+  const out = await askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {});
+  assert.deepEqual(out.recipes.map((r) => r.recipe_name), ['Besan Bread Toast'], 'only cited ids render as library cards');
 });
 
 test('ask under Veg filter: the model only ever receives veg candidates', async () => {
   let sawEgg = false;
-  const chat = async (prompt: string) => { sawEgg = /Spicy Egg Omelette/.test(prompt); return 'ok'; };
+  const chat = async (prompt: string) => { sawEgg = /Spicy Egg Omelette/.test(prompt); return '{"text":"ok","ids":[]}'; };
   const candidates = filterCandidateRecipes(rows, { diet: 'Veg' });
   await askWithValidation(chat, candidates, 'any snack?', { diet: 'Veg' });
   assert.equal(sawEgg, false, 'egg dish must not even reach the prompt under Veg');
 });
 
-test('long descriptive names: [[Ven Pongal]] matches \"Ven Pongal (Chef Damu style, ...)\" and normalizes', async () => {
-  const longRows = [
-    { recipe_name: 'Ven Pongal (Chef Damu style, with ulutham paruppu thogayal side)', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAA5', diet: 'Veg', meal_type: 'breakfast', ingredients: 'rice, dal', verified: 'yes' },
-  ] as any;
-  const chat = async () => 'For breakfast try [[Ven Pongal]].';
-  const out = await askWithValidation(chat, longRows, 'breakfast?', { diet: 'Veg' });
-  assert.equal(out, 'For breakfast try Ven Pongal (Chef Damu style, with ulutham paruppu thogayal side).');
-});
 
-test('ambiguous prefix shared by two recipes is accepted for NEITHER', async () => {
-  const twoRows = [
-    { recipe_name: 'Tomato Rice (Hema style)', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAA6', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice', verified: 'yes' },
-    { recipe_name: 'Tomato Rice (Chef Damu style)', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAA7', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice', verified: 'yes' },
-  ] as any;
-  const chat = async () => 'Have [[Tomato Rice]] for lunch.';
-  await assert.rejects(askWithValidation(chat, twoRows, 'lunch?', {}), /outside the library/);
-});
 
 import { constrainAskCandidates } from './pick.js';
 
@@ -127,4 +126,13 @@ test('ask constraints: a suggested dish hides only itself, not sibling dishes fr
 test('ask constraints: question stopwords never become food filters', () => {
   const r = constrainAskCandidates(askRows, 'which chutney recipes do I have?', { titles: {}, videoOnly: {} }, { which: 'food', have: 'food', chutney: 'mood' });
   assert.equal(r.candidates.length, 3, 'stopwords ignored even if the classifier mislabels them');
+});
+
+test('ask constraints: inventory lookups bypass no-repeat, recommendations do not', () => {
+  const ex = { titles: {}, videoOnly: { BBBBBBBBBB1: true } }; // Besan Bread Toast just suggested
+  const lookup = constrainAskCandidates(askRows, 'which bread recipes do I have?', ex, { bread: 'food' });
+  assert.deepEqual(lookup.candidates.map((x) => x.recipe_name), ['Besan Bread Toast'], 'owned recipe must show in an inventory answer even when recently suggested');
+  const reco = constrainAskCandidates(askRows, 'any bread snack ideas?', ex, { bread: 'food' });
+  assert.equal(reco.candidates.length, 0, 'recommendation still hides the just-suggested recipe');
+  assert.ok(reco.zeroReason);
 });
