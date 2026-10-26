@@ -18,7 +18,7 @@ import {
   addQueueRequest, getQueueRequest
 } from './data.js';
 import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords } from './pick.js';
-import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION } from './semantic.js';
+import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION, loadSemantic } from './semantic.js';
 import { getSession, putSession, clearSession, isMoreIntent, validSessionId } from './session.js';
 import { createHash } from 'node:crypto';
 import { CommTrace, MemoryTraceStore } from './comm-trace.js';
@@ -184,6 +184,9 @@ app.post('/api/ask-ai', async (req, res) => {
     if (!meal) meal = prior.meal;
   }
   const sessionEcho = { session_id: sessionId, continued: !!(more && prior), diet, meal };
+  // Warm the local embedding model in the background (bounded, non-blocking)
+  // so the slim + answer cache engage on later requests to this instance.
+  loadSemantic().catch(() => {});
   try {
     // Same hard constraints as picks: verified/diet/meal via the shared
     // filter, then the ask route's own rules - hard "no X" exclusions, the
