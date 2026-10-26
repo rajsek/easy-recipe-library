@@ -23,9 +23,8 @@ change; the PR description must show they were followed.
   auto-deploy; the squash merge is the only deploy trigger.
 - Every PR description includes: what changed and why, which tests ran and
   their results, and remaining limitations or known gaps.
-- Failed checks block release. Do not merge while a required check is failing,
-  unless the failure is verified to be an external quota/infra issue and the
-  PR states that explicitly.
+- Failed checks block release. No merge while any required check is failing -
+  no exceptions without the owner's explicit say-so on that specific case.
 
 ## Documentation
 
