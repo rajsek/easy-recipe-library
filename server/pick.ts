@@ -127,6 +127,9 @@ export function normalizeNoteWord(word: string, vocab: string[]): { word: string
   const w = String(word || '').toLowerCase();
   if (NOTE_ALIASES[w]) return { word: NOTE_ALIASES[w], interpreted: { from: word, to: NOTE_ALIASES[w] } };
   if (w.length < 4 || vocab.indexOf(w) !== -1) return { word };
+  // A question or request word is never a typo for an ingredient ("what" is
+  // not "wheat"): the edit-distance guess must not run on them.
+  if (ASK_REQUEST_WORDS.has(w) || NOTE_STOP.has(w)) return { word };
   const cand = vocab.filter((v) => v[0] === w[0] && editDistanceLe1(w, v));
   if (cand.length === 1) return { word: cand[0], interpreted: { from: word, to: cand[0] } };
   return { word };
@@ -217,9 +220,11 @@ export function constrainAskCandidates(
       return !exN.words.some((x) => wordRe(x).test(hay));
     });
   }
+  const afterNoteExclusions = out;
+  const noRepeatRan = !isLookupQuestion(question);
   const q = question.toLowerCase();
   const shortOf = (s: string) => String(s || '').split('(')[0].trim().toLowerCase();
-  if (!isLookupQuestion(question)) out = out.filter((r) => {
+  if (noRepeatRan) out = out.filter((r) => {
     const short = shortOf(r.recipe_name);
     if (short.length >= 4 && q.indexOf(short) !== -1) return true; // asked about by name: always answerable
     const id = videoIdOf(r.video_url);
@@ -242,27 +247,39 @@ export function constrainAskCandidates(
     .filter((p) => (classification[p.orig] === 'food' || p.interpreted || wideIng.includes(p.word) || (wideV.includes(p.word) && classification[p.orig] !== 'mood')) && !ASK_REQUEST_WORDS.has(p.word))
     .map((p) => p.word);
   if (foodWords.length > 0) {
-    const matched = out.filter((r) => {
-      const hay = r.recipe_name + ' ' + (r.ingredients || '');
-      return foodWords.some((k) => wordRe(k).test(hay));
-    });
+    const hayOf = (r: RecipeRow) => r.recipe_name + ' ' + (r.ingredients || '');
+    // Multiple food words are an AND: "onion paneer" means recipes with
+    // BOTH, never a silent OR that shows onion-only or paneer-only dishes.
+    const hasEvery = (r: RecipeRow) => foodWords.every((k) => wordRe(k).test(hayOf(r)));
+    const matched = out.filter(hasEvery);
     if (matched.length === 0) {
-      // Coverage must be qualified: "none under these filters" is NOT "none
-      // in the library". When the wider verified library DOES list the food,
-      // say so and name the way through (loosen the filters).
+      // Stage the pool so the reason names the REAL cause with deterministic
+      // counts - library-wide absence vs diet/meal filters vs the note's own
+      // exclusions vs the 30-day no-repeat - never a model guess. The stages
+      // are sequential filters, so each recipe is counted at the first stage
+      // that drops it.
+      const pool = allVerified && allVerified.length ? allVerified : candidates;
+      const inLibrary = pool.filter(hasEvery);
+      const keyOf = (r: RecipeRow) => String(r.video_url || '') + '|' + r.recipe_name;
+      const minus = (a: RecipeRow[], b: RecipeRow[]) => { const s = new Set(b.map(keyOf)); return a.filter((r) => !s.has(keyOf(r))); };
+      const fmtList = (rs: RecipeRow[]) => rs.slice(0, 3).map((r) => r.recipe_name).join('; ') + (rs.length > 3 ? '; ...' : '');
       let reason: string;
-      const wider = (allVerified && allVerified.length > out.length)
-        ? allVerified.filter((r) => foodWords.some((k) => wordRe(k).test(r.recipe_name + ' ' + (r.ingredients || ''))))
-        : [];
-      if (wider.length > 0) {
-        reason = 'No verified recipe lists ' + foodWords.map((k) => '"' + k + '"').join(' or ') +
-          ' under your current filters - but the checked library has ' + wider.length +
-          ' outside them (' + wider.slice(0, 3).map((r) => r.recipe_name).join('; ') +
-          (wider.length > 3 ? '; ...' : '') + '). Loosen a filter to see them. Nothing invented to fill the gap.';
-      } else {
-        reason = 'No verified recipe matches everything - ' + coverageNote('library', foodWords, allVerified && allVerified.length ? allVerified : out) +
+      if (inLibrary.length === 0) {
+        reason = 'No verified recipe matches everything - ' + coverageNote('library', foodWords, pool) +
           (interpreted.length > 0 ? '; interpreted ' + interpreted.map((i) => '"' + i.from + '" as "' + i.to + '"').join(', ') : '') +
           '. Nothing invented to fill the gap - a gap in the checked library, not proof the dish does not exist.';
+      } else {
+        const afterDietMeal = candidates.filter(hasEvery);
+        const dietMealDropped = minus(inLibrary, afterDietMeal);
+        const exDropped = minus(afterDietMeal, afterNoteExclusions.filter(hasEvery));
+        const repeatDropped = noRepeatRan ? afterNoteExclusions.filter(hasEvery) : [];
+        const causes: string[] = [];
+        if (repeatDropped.length > 0) causes.push(repeatDropped.length + ' checked ' + (repeatDropped.length === 1 ? 'recipe was' : 'recipes were') + ' already suggested within the last 30 days, so the no-repeat rule hides ' + (repeatDropped.length === 1 ? 'it' : 'them') + ' (' + fmtList(repeatDropped) + ') - ask for one by name to see it again');
+        if (dietMealDropped.length > 0) causes.push(dietMealDropped.length + ' ' + (dietMealDropped.length === 1 ? 'sits' : 'sit') + ' outside your current diet/meal filters (' + fmtList(dietMealDropped) + ') - loosen a filter to see ' + (dietMealDropped.length === 1 ? 'it' : 'them'));
+        if (exDropped.length > 0) causes.push(exDropped.length + ' removed by your own exclusion note (' + fmtList(exDropped) + ')');
+        reason = 'No verified recipe left for ' + foodWords.map((k) => '"' + k + '"').join(' + ') + ': ' +
+          (causes.length > 0 ? causes.join('; ') : 'the checked library has ' + inLibrary.length + ' (' + fmtList(inLibrary) + ') but every one was constrained out') +
+          '. Nothing invented to fill the gap.';
       }
       return { candidates: [], interpreted, zeroReason: reason };
     }
@@ -408,16 +425,21 @@ export async function pickForMe(
     parts.push('excluded recipes containing ' + exN.words.map((x) => '"' + x + '"').join(', '));
   }
   if (kwN.words.length > 0) {
-    // An explicit word in the note is a HARD requirement: a pick that does
-    // not mention it is wrong, never "close enough". AI ranking, when on,
-    // only re-orders whatever survives this filter.
+    // Library words (a known ingredient/dish word, or an unambiguous
+    // interpretation of one) are HARD requirements and combine as AND:
+    // "onion paneer" means a recipe with BOTH, never a silent OR. Words the
+    // library does not know (wishes like "quick") stay out of the hard
+    // filter - the ranking/meaning path below handles them. AI ranking, when
+    // on, only re-orders whatever survives this filter.
+    const hard = [...new Set(kwN.pairs.filter((p) => p.interpreted || vocab.indexOf(p.word) !== -1).map((p) => p.word))];
+    const req = hard.length > 0 ? hard : kwN.words;
     const matched = candidates.filter((r) => {
       const hay = r.recipe_name + ' ' + (r.ingredients || '');
-      return kwN.words.some((k) => wordRe(k).test(hay));
+      return hard.length > 0 ? req.every((k) => wordRe(k).test(hay)) : req.some((k) => wordRe(k).test(hay));
     });
     if (matched.length > 0) {
       candidates = matched;
-      parts.push('showing only recipes whose name or ingredients match at least one of ' + kwN.words.map((k) => '"' + k + '"').join(', '));
+      parts.push('showing only recipes whose name or ingredients match ' + (req.length > 1 ? 'every one of ' : '') + req.map((k) => '"' + k + '"').join(', '));
     } else if (rankFn) {
       // A word nothing mentions literally may only become a soft
       // ranked-by-meaning wish when the classifier says it is clearly a
@@ -427,20 +449,20 @@ export async function pickForMe(
       let allMood = false;
       if (classifyFn) {
         try {
-          const cls = await classifyFn(kwN.words);
-          allMood = kwN.words.every((k) => cls[k] === 'mood');
+          const cls = await classifyFn(req);
+          allMood = req.every((k) => cls[k] === 'mood');
         } catch { allMood = false; }
       }
       if (allMood) {
-        parts.push('no recipe name or ingredient mentions ' + kwN.words.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
+        parts.push('no recipe name or ingredient mentions ' + req.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
       } else {
-        const coverage = coverageNote([filter.diet, filter.meal].filter(Boolean).join(' ') || 'unfiltered', kwN.words, candidates);
+        const coverage = coverageNote([filter.diet, filter.meal].filter(Boolean).join(' ') || 'unfiltered', req, candidates);
         candidates = [];
         noteZeroMatch = true;
         parts.push('no verified recipe matches everything - ' + coverage + '. Nothing filled in; this is a gap in the checked library, not proof the dish does not exist');
       }
     } else {
-      const coverage = coverageNote([filter.diet, filter.meal].filter(Boolean).join(' ') || 'unfiltered', kwN.words, candidates);
+      const coverage = coverageNote([filter.diet, filter.meal].filter(Boolean).join(' ') || 'unfiltered', req, candidates);
       candidates = [];
       noteZeroMatch = true;
       parts.push('no verified recipe matches everything - ' + coverage + '. Nothing filled in; this is a gap in the checked library, not proof the dish does not exist');
