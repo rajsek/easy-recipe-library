@@ -19,7 +19,7 @@ const NOW = new Date('2026-10-26T12:00:00');
 
 test('30-day exclusion: recent suggested+cooked excluded, old suggestion not, saved-for-later not', () => {
   const ex = excludedIds(HISTORY, PICKS, NOW);
-  assert.ok(ex['X4649wE4tLU'], 'recent suggested excluded');
+  assert.ok(ex['4CrJpfLkT3o'], 'recent suggested excluded');
   assert.ok(ex['3qb0x14XRTA'], 'recent cooked excluded');
   assert.ok(!ex['oOHH3oB7OOk'], '>30d suggestion NOT excluded');
   assert.ok(!ex['glYa2-Y8yEI'], 'saved-for-later NOT excluded');
@@ -30,7 +30,7 @@ test('picks: max 5, verified only, no excluded, partial never picked', async () 
   const r = await pickForMe({}, '', RECIPES, ex);
   assert.ok(r.count <= 5);
   const names = r.picks.map((p) => p.name).join('|');
-  assert.ok(!/Besan Bread Toast|Soya Chukka/.test(names), 'excluded dishes not picked');
+  assert.ok(!/Onion Rava Dosa|Soya Chukka/.test(names), 'excluded dishes not picked');
   assert.ok(!/Protein Mixture/.test(names), 'partial-verified never picked');
   assert.ok(r.count > 0, 'recipes remain after exclusion');
   assert.equal(r.usedAI, false);
@@ -139,6 +139,25 @@ test('positive note keyword: deterministic boost, name match wins', async () => 
     { recipe_name: 'Curd Rice', video_url: 'https://www.youtube.com/watch?v=DDDDDDDDDD3', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice, curd', verified: 'yes' },
   ];
   const r = await pickForMe({}, 'pepper', rows as any, {});
-  assert.equal(r.picks[0].name, 'Pepper Rasam');
-  assert.match(r.noteInfo, /prioritized matches for "pepper"/);
+  assert.deepEqual(r.picks.map((p) => p.name), ['Pepper Rasam'], 'note keyword is a hard filter, not a boost');
+  assert.match(r.noteInfo, /match "pepper"/);
+});
+
+test('note "bread" + veg + snack: only bread recipes returned, never an unrelated snack', async () => {
+  const rows = [
+    { recipe_name: 'Medu Vada (ulundu vadai, mixer method)', video_url: 'https://www.youtube.com/watch?v=FFFFFFFFFF1', diet: 'Veg', meal_type: 'Breakfast / evening snack', ingredients: 'urad dal, pepper, curry leaves, oil', verified: 'yes' },
+    { recipe_name: 'Besan Bread Toast', video_url: 'https://www.youtube.com/watch?v=FFFFFFFFFF2', diet: 'Veg', meal_type: 'Evening snack or breakfast', ingredients: 'bread slices, besan, onion, tomato', verified: 'yes' },
+  ];
+  const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'bread', rows as any, {});
+  assert.deepEqual(r.picks.map((p) => p.name), ['Besan Bread Toast']);
+  assert.match(r.noteInfo, /match "bread"/);
+});
+
+test('note keyword nothing matches: honest zero, no filler', async () => {
+  const rows = [
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=FFFFFFFFFF3', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal, oil', verified: 'yes' },
+  ];
+  const r = await pickForMe({}, 'pasta', rows as any, {});
+  assert.equal(r.count, 0);
+  assert.match(r.noteInfo, /no verified recipe matches "pasta"/);
 });
