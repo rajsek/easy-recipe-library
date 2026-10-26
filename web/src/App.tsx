@@ -511,10 +511,10 @@ export default function App() {
               </div>
               {askMode === 'ai' && aiOn && (
                 <>
-                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || !pnote.trim()}>
+                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || (!pnote.trim() && selIngs.length === 0)}>
                     {askAiState === 'sending' ? 'Asking...' : 'Ask about the note above'}
                   </button>
-                  {!pnote.trim() && <p className="muted">Type a note or question above first.</p>}
+                  {!pnote.trim() && selIngs.length === 0 && <p className="muted">Type a note or pick ingredients above first.</p>}
                 </>
               )}
               {askMode === 'whatsapp' && (
