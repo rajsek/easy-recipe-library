@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pickForMe, excludedIds, videoIdOf } from './pick.js';
+import { pickForMe, excludedIds, videoIdOf, constrainAskCandidates } from './pick.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const demo = JSON.parse(readFileSync(path.join(__dirname, 'test-fixtures.json'), 'utf8'));
@@ -349,4 +349,13 @@ test('dietClass: "Veg (needs eggless mayo dip)" is veg-conditional - excluded fr
   assert.deepEqual(veg, ['Plain Salad'], 'conditional card stays out of strict Veg picks');
   assert.deepEqual(nonveg, [], 'conditional card is not Non-veg either');
   assert.equal(filterCandidateRecipes(rows as any, {}).length, 2, 'both visible unfiltered');
+});
+
+test('ask constraints: diet vocabulary in a question is a request word, never an ingredient filter', () => {
+  const candidates = [
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=CCCCCCCCCC1', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal, salt', verified: 'yes' },
+  ] as any;
+  const { candidates: out, zeroReason } = constrainAskCandidates(candidates, 'quick veg snack idea?', { titles: {}, videoOnly: {} }, { quick: 'mood' });
+  assert.equal(zeroReason, undefined, 'the word veg must not zero the pool');
+  assert.equal(out.length, 1);
 });
