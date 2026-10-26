@@ -136,3 +136,53 @@ test('ask constraints: inventory lookups bypass no-repeat, recommendations do no
   assert.equal(reco.candidates.length, 0, 'recommendation still hides the just-suggested recipe');
   assert.ok(reco.zeroReason);
 });
+
+test('ask constraints: multiple food words are an AND, never a silent OR', () => {
+  const rows = [
+    { recipe_name: 'Onion Pakoda', video_url: 'https://www.youtube.com/watch?v=IIIIIIIIII1', diet: 'Veg', meal_type: 'snack', ingredients: 'onion, besan', verified: 'yes' },
+    { recipe_name: 'Paneer Corn Kebab', video_url: 'https://www.youtube.com/watch?v=IIIIIIIIII2', diet: 'Veg', meal_type: 'snack', ingredients: 'paneer, sweet corn, onion', verified: 'yes' },
+    { recipe_name: 'Paneer Toast', video_url: 'https://www.youtube.com/watch?v=IIIIIIIIII3', diet: 'Veg', meal_type: 'snack', ingredients: 'paneer, bread', verified: 'yes' },
+  ] as any;
+  const r = constrainAskCandidates(rows, 'onion paneer ideas?', { titles: {}, videoOnly: {} }, { onion: 'food', paneer: 'food', ideas: 'unknown' }, undefined, rows);
+  assert.deepEqual(r.candidates.map((x) => x.recipe_name), ['Paneer Corn Kebab'], 'only the BOTH recipe survives');
+});
+
+test('ask constraints: question word "what" never becomes the ingredient "wheat"', () => {
+  const rows = [
+    { recipe_name: 'Wheat Pancakes', video_url: 'https://www.youtube.com/watch?v=JJJJJJJJJJ1', diet: 'Veg', meal_type: 'breakfast', ingredients: 'wheat flour, banana', verified: 'yes' },
+    { recipe_name: 'Paneer Toast', video_url: 'https://www.youtube.com/watch?v=JJJJJJJJJJ2', diet: 'Veg', meal_type: 'snack', ingredients: 'paneer, bread', verified: 'yes' },
+  ] as any;
+  const r = constrainAskCandidates(rows, 'what paneer dishes can I make?', { titles: {}, videoOnly: {} }, {}, undefined, rows);
+  assert.deepEqual(r.candidates.map((x) => x.recipe_name), ['Paneer Toast'], 'only paneer filters; what stays a question word');
+});
+
+test('ask zero reason: no-repeat cause names recent suggestions, not "outside filters"', () => {
+  const rows = [
+    { recipe_name: 'Paneer Butter Masala', video_url: 'https://www.youtube.com/watch?v=KKKKKKKKKK1', diet: 'Veg', meal_type: 'lunch', ingredients: 'paneer, tomato, cashew', verified: 'yes' },
+    { recipe_name: 'Curd Rice', video_url: 'https://www.youtube.com/watch?v=KKKKKKKKKK2', diet: 'Veg', meal_type: 'lunch', ingredients: 'rice, curd', verified: 'yes' },
+  ] as any;
+  const ex = { titles: {}, videoOnly: { KKKKKKKKKK1: true } }; // suggested yesterday
+  const r = constrainAskCandidates(rows, 'paneer ideas?', ex, { paneer: 'food', ideas: 'unknown' }, undefined, rows);
+  assert.equal(r.candidates.length, 0);
+  assert.match(r.zeroReason || '', /already suggested within the last 30 days/);
+  assert.match(r.zeroReason || '', /Paneer Butter Masala/);
+  assert.match(r.zeroReason || '', /ask for one by name/);
+});
+
+test('ask zero reason: diet/meal cause names the filter, not no-repeat', () => {
+  const rows = [
+    { recipe_name: 'Peanut Chutney', video_url: 'https://www.youtube.com/watch?v=LLLLLLLLLL1', diet: 'Veg', meal_type: 'side', ingredients: 'peanut, chilli', verified: 'yes' },
+    { recipe_name: 'Medu Vada', video_url: 'https://www.youtube.com/watch?v=LLLLLLLLLL2', diet: 'Veg', meal_type: 'snack', ingredients: 'urad dal', verified: 'yes' },
+  ] as any;
+  const snackOnly = rows.filter((r) => r.meal_type === 'snack'); // what a meal filter would pass in
+  const r = constrainAskCandidates(snackOnly, 'chutney ideas?', { titles: {}, videoOnly: {} }, { chutney: 'food', ideas: 'unknown' }, undefined, rows);
+  assert.equal(r.candidates.length, 0);
+  assert.match(r.zeroReason || '', /outside your current diet\/meal filters/);
+  assert.match(r.zeroReason || '', /Peanut Chutney/);
+});
+
+test('ask zero reason: genuine library-wide absence keeps coverage counts', () => {
+  const r = constrainAskCandidates(askRows, 'sushi ideas?', { titles: {}, videoOnly: {} }, { sushi: 'food', ideas: 'unknown' }, undefined, askRows);
+  assert.equal(r.candidates.length, 0);
+  assert.match(r.zeroReason || '', /gap in the checked library/);
+});
