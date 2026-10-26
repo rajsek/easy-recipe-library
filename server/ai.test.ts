@@ -82,18 +82,18 @@ const askRows = [
 
 test('ask constraints: bread regression holds - bread question zeros when no bread recipe qualifies', () => {
   const noBread = askRows.filter((r) => r.recipe_name !== 'Besan Bread Toast');
-  const r = constrainAskCandidates(noBread, 'which bread recipes do I have?', {}, { bread: 'food', recipes: 'unknown', have: 'unknown' });
+  const r = constrainAskCandidates(noBread, 'which bread recipes do I have?', { titles: {}, videoOnly: {} }, { bread: 'food', recipes: 'unknown', have: 'unknown' });
   assert.equal(r.candidates.length, 0);
   assert.match(r.zeroReason || '', /"bread"/);
 });
 
 test('ask constraints: food word hard-filters to matching candidates', () => {
-  const r = constrainAskCandidates(askRows, 'any bread snack ideas?', {}, { bread: 'food', snack: 'unknown', ideas: 'unknown' });
+  const r = constrainAskCandidates(askRows, 'any bread snack ideas?', { titles: {}, videoOnly: {} }, { bread: 'food', snack: 'unknown', ideas: 'unknown' });
   assert.deepEqual(r.candidates.map((x) => x.recipe_name), ['Besan Bread Toast']);
 });
 
 test('ask constraints: no-repeat hides recent picks UNLESS the question names the dish', () => {
-  const ex = { BBBBBBBBBB1: true }; // Besan Bread Toast suggested recently
+  const ex = { titles: {}, videoOnly: { BBBBBBBBBB1: true } }; // Besan Bread Toast shown in a recent pick (video-level)
   const generic = constrainAskCandidates(askRows, 'what snack should I make?', ex, {});
   assert.ok(!generic.candidates.some((r) => r.recipe_name === 'Besan Bread Toast'), 'hidden in generic ask');
   const direct = constrainAskCandidates(askRows, 'how do I make Besan Bread Toast?', ex, {});
@@ -101,11 +101,30 @@ test('ask constraints: no-repeat hides recent picks UNLESS the question names th
 });
 
 test('ask constraints: "no peanut" exclusion is hard', () => {
-  const r = constrainAskCandidates(askRows, 'chutney ideas, no peanut', {}, {});
+  const r = constrainAskCandidates(askRows, 'chutney ideas, no peanut', { titles: {}, videoOnly: {} }, {});
   assert.ok(!r.candidates.some((x) => /peanut/i.test(x.recipe_name)));
 });
 
 test('ask constraints: unclassified/mood words never zero a natural question', () => {
-  const r = constrainAskCandidates(askRows, 'what is the quickest breakfast?', {}, { quickest: 'mood', breakfast: 'unknown' });
+  const r = constrainAskCandidates(askRows, 'what is the quickest breakfast?', { titles: {}, videoOnly: {} }, { quickest: 'mood', breakfast: 'unknown' });
   assert.equal(r.candidates.length, 3, 'no hard filter without an explicit food word');
+});
+
+test('ask constraints: a suggested dish hides only itself, not sibling dishes from the same video', () => {
+  const rows = [
+    { recipe_name: 'Onion Rava Dosa (hotel style)', video_url: 'https://www.youtube.com/watch?v=SAMESAMESAM', diet: 'Veg', meal_type: 'breakfast', ingredients: 'rava, rice flour', verified: 'yes' },
+    { recipe_name: 'Khara Pudina Chutney (spicy mint chutney for rava dosa)', video_url: 'https://www.youtube.com/watch?v=SAMESAMESAM', diet: 'Veg', meal_type: 'side', ingredients: 'mint, coconut', verified: 'yes' },
+  ] as any;
+  const ex = { titles: { SAMESAMESAM: ['Onion Rava Dosa (hotel style)'] }, videoOnly: {} };
+  const r = constrainAskCandidates(rows, 'which chutney recipes do I have?', ex, { chutney: 'food' });
+  assert.deepEqual(r.candidates.map((x) => x.recipe_name), ['Khara Pudina Chutney (spicy mint chutney for rava dosa)'], 'sibling dish stays answerable');
+  const dosa = constrainAskCandidates(rows, 'dosa ideas?', ex, {});
+  assert.ok(!dosa.candidates.some((x) => /Rava Dosa/.test(x.recipe_name)), 'suggested dish hidden');
+  const direct = constrainAskCandidates(rows, 'how do I make Onion Rava Dosa?', ex, {});
+  assert.ok(direct.candidates.some((x) => /Rava Dosa/.test(x.recipe_name)), 'direct question answerable');
+});
+
+test('ask constraints: question stopwords never become food filters', () => {
+  const r = constrainAskCandidates(askRows, 'which chutney recipes do I have?', { titles: {}, videoOnly: {} }, { which: 'food', have: 'food', chutney: 'mood' });
+  assert.equal(r.candidates.length, 3, 'stopwords ignored even if the classifier mislabels them');
 });
