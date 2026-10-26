@@ -17,7 +17,10 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab } from './pick.js';
+import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords } from './pick.js';
+import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION } from './semantic.js';
+import { getSession, putSession, clearSession, isMoreIntent, validSessionId } from './session.js';
+import { createHash } from 'node:crypto';
 import { CommTrace, MemoryTraceStore } from './comm-trace.js';
 import { randomUUID } from 'node:crypto';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
@@ -56,7 +59,7 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-app.get('/api/state', (_req, res) => res.json({ mode, ai: !!rankFn, aiProvider }));
+app.get('/api/state', (_req, res) => res.json({ mode, ai: !!aiProvider, aiProvider, semantic: semanticStatus() }));
 
 app.get('/api/channels', async (_req, res) => res.json(await getChannels()));
 
@@ -93,9 +96,15 @@ app.post('/api/history', async (req, res) => {
 });
 
 // AI ranking - only when the owner opted in via env (see README privacy note).
-const { rankFn, provider: aiProvider } = buildRankFn();
-const classifyFn = buildClassifyFn();
-const askFn = buildAskFn();
+// Builders are called per request with a request-scoped usage sink so the
+// trace records provider-reported tokens for exactly this request's calls.
+const { provider: aiProvider } = buildRankFn();
+const askCache = new SemanticCache();
+function libraryVersion(recipes: any[]): string {
+  const h = createHash('sha256');
+  for (const r of recipes) h.update(String(r.recipe_name) + '|' + String(r.diet) + '|' + String(r.verified) + ';');
+  return h.digest('hex').slice(0, 12);
+}
 
 app.post('/api/pick', async (req, res) => {
   const diet = String(req.body?.diet || '');
@@ -109,9 +118,17 @@ app.post('/api/pick', async (req, res) => {
     mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
     mode === 'demo' ? [...picks, ...demoPicks] : picks
   );
-  const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn);
+  const sink = { calls: [] as any[] };
+  const { rankFn } = buildRankFn(sink);
+  const classifyFn = buildClassifyFn(sink);
+  // Meaning-aware slim: when the pool is large, embeddings pick the 12 most
+  // relevant candidates BEFORE any AI call - smaller prompts, fewer tokens.
+  // Hard constraints already ran; null (model unavailable) keeps the full pool.
+  const slimFn = async (cs: any[]) => semanticRank((note || '') + ' ' + diet + ' ' + meal, cs, 12);
+  const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn, slimFn);
   await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
-  res.json(result);
+  const usage = sink.calls.reduce((a, c) => ({ prompt: a.prompt + c.prompt_tokens, completion: a.completion + c.completion_tokens, total: a.total + c.total_tokens }), { prompt: 0, completion: 0, total: 0 });
+  res.json({ ...result, usage: { ...usage, calls: sink.calls.length, provider: aiProvider || '' }, semantic: semanticStatus().available ? SEMANTIC_VERSION : 'off' });
 });
 
 // Request queue ("ask in the app"): writes a row to the private Queue tab;
@@ -144,15 +161,29 @@ app.delete('/api/traces', async (_req, res) => {
 });
 
 app.post('/api/ask-ai', async (req, res) => {
+  const sink = { calls: [] as any[] };
+  const askFn = buildAskFn(sink);
+  const classifyFn = buildClassifyFn(sink);
   if (!askFn) return res.status(503).json({ error: 'AI answers are not set up on this deployment.' });
   const traceId = randomUUID().slice(0, 8);
   const traceBase = { request_id: traceId, ts: new Date().toISOString(), mode: 'ai' as const, request_text: String(req.body?.question || '').slice(0, 500), model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b', prompt_version: 'ask-v2-json' };
   const question = String(req.body?.question || '').trim();
   if (!question) return res.status(400).json({ error: 'no question given' });
   if (question.length > 500) return res.status(400).json({ error: 'question too long (500 chars max)' });
-  const diet = String(req.body?.diet || '');
-  const meal = String(req.body?.meal || '');
+  let diet = String(req.body?.diet || '');
+  let meal = String(req.body?.meal || '');
   if (diet && !['Veg', 'Non-veg', 'Egg', 'Contains egg'].includes(diet)) return res.status(400).json({ error: 'bad diet' });
+  // App-managed session: a follow-up ("another option") continues the stored
+  // request instead of starting blank. Provider stays stateless; the compact
+  // context is ours.
+  const sessionId = validSessionId(req.body?.session_id) ? String(req.body.session_id) : '';
+  const more = isMoreIntent(question);
+  const prior = sessionId ? getSession(sessionId) : null;
+  if (more && prior) {
+    if (!diet) diet = prior.diet;
+    if (!meal) meal = prior.meal;
+  }
+  const sessionEcho = { session_id: sessionId, continued: !!(more && prior), diet, meal };
   try {
     // Same hard constraints as picks: verified/diet/meal via the shared
     // filter, then the ask route's own rules - hard "no X" exclusions, the
@@ -163,28 +194,69 @@ app.post('/api/ask-ai', async (req, res) => {
       mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
       mode === 'demo' ? [...picks, ...demoPicks] : picks
     );
+    // A continued request also hides what it was just shown.
+    if (more && prior) for (const id of prior.lastVideoIds) ex.videoOnly[id] = true;
     const base = filterCandidateRecipes(recipes as any, { diet, meal });
     const keywords = parseNote(question).keywords;
+    // Constraint signature for the semantic cache: normalized note words,
+    // current no-repeat state, library and model versions, intent. A wording
+    // look-alike with different constraints NEVER reuses an answer. Computed
+    // BEFORE any model call: a cache hit costs zero AI calls, zero tokens.
+    const vocab = noteVocab(recipes as any);
+    const kwN = normalizeNoteWords(keywords, vocab);
+    const exN = normalizeNoteWords(parseNote(question).exclusions, vocab);
+    const excludedHash = createHash('sha256').update(JSON.stringify([Object.keys(ex.videoOnly).sort(), Object.keys(ex.titles).sort()])).digest('hex').slice(0, 12);
+    const intent = more ? 'more' : 'answer';
+    const sig = constraintSignature({ diet, meal, exclusions: exN.words, foodWords: kwN.words, excludedHash, libraryVersion: libraryVersion(recipes as any), intent });
+    const cached = await askCache.get(question, sig, intent);
+    if (cached) {
+      await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: semantic cache hit - no model call', reply_text: JSON.stringify(cached).slice(0, 400), handling: 'cache hit; 0 AI calls; 0 tokens', status: 'ok', semantic: 'hit', ai_calls: 0, prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 });
+      return res.json({ ...(cached as object), request_id: traceId, cached: true, session: sessionEcho });
+    }
     let cls: Record<string, string> = {};
     if (classifyFn && keywords.length > 0) {
       try { cls = await classifyFn(keywords); } catch { cls = {}; }
     }
-    const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, noteVocab(recipes as any));
+    const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, vocab);
     if (zeroReason) {
       await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer', handling: 'no candidates; no model call', status: 'ok' });
-      return res.json({ answer: zeroReason, request_id: traceId, interpreted });
+      return res.json({ answer: zeroReason, request_id: traceId, interpreted, session: sessionEcho });
     }
-    const { text, recipes: cited } = await askFn(candidates, question, { diet, meal });
-    await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' verified candidates + question', reply_text: text, handling: 'filters: diet=' + (diet || 'any') + ' meal=' + (meal || 'any') + '; ' + cited.length + ' cited cards; status 200', status: 'ok' });
-    res.json({
+    // Meaning-aware slim: large pools shrink to the 25 most relevant
+    // candidates before the model sees anything - smaller prompt, fewer
+    // tokens. Hard constraints already ran; a slim failure keeps the pool.
+    let forModel = candidates;
+    if (candidates.length > 25) {
+      const slim = await semanticRank(question, candidates, 25);
+      if (slim) forModel = slim;
+    }
+    const { text, recipes: cited } = await askFn(forModel, question, { diet, meal });
+    const usage = sink.calls.reduce((a, c) => ({ prompt: a.prompt + c.prompt_tokens, completion: a.completion + c.completion_tokens, total: a.total + c.total_tokens }), { prompt: 0, completion: 0, total: 0 });
+    const body = {
       answer: text,
-      request_id: traceId,
       recipes: cited.map((r: any) => ({ name: r.recipe_name, url: r.video_url, time: r.time_notes || '', diet: r.diet || '', meal: r.meal_type || '', reason: '' })),
+    };
+    await askCache.put(question, sig, body);
+    if (sessionId) putSession(sessionId, { diet, meal, exclusions: exN.words, lastVideoIds: cited.map((r: any) => String(r.video_url || '')).map((u: string) => (u.match(/v=([\w-]{11})/) || [])[1] || '').filter(Boolean) });
+    await commTrace.record({
+      ...traceBase, outbound_payload: 'ask-ai: ' + forModel.length + ' verified candidates + question', reply_text: text,
+      handling: 'filters: diet=' + (diet || 'any') + ' meal=' + (meal || 'any') + '; ' + cited.length + ' cited cards; status 200', status: 'ok',
+      semantic: 'miss', ai_calls: sink.calls.length,
+      prompt_tokens: usage.prompt, completion_tokens: usage.completion, total_tokens: usage.total,
+      provider_request_ids: sink.calls.map((c) => c.request_id).filter(Boolean),
     });
+    res.json({ ...body, request_id: traceId, session: sessionEcho, usage: { ...usage, calls: sink.calls.length, provider: aiProvider || '' } });
   } catch {
     await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai', reply_text: '', handling: 'model or validation failure', status: 'error', error: 'AI answer failed validation or provider call' });
     res.status(502).json({ error: 'The AI answer failed this time - please try again.', request_id: traceId });
   }
+});
+
+app.post('/api/session/reset', (req, res) => {
+  const id = validSessionId(req.body?.session_id) ? String(req.body.session_id) : '';
+  if (id) clearSession(id);
+  // Honest scope: demo sessions live in this instance's memory only.
+  res.json({ cleared: !!id, persistent: false });
 });
 
 app.get('/api/ask/:id', async (req, res) => {
@@ -209,6 +281,6 @@ const isDirectRun = process.argv[1] ? import.meta.url === pathToFileURL(process.
 if (isDirectRun) {
   const port = Number(process.env.PORT || 3000);
   app.listen(port, HOST, () => {
-    console.log(`Easy Recipe Library (${mode} mode, AI ${rankFn ? 'ON:' + aiProvider : 'off'}, auth ${APP_TOKEN ? 'ON' : 'off'}) -> http://${HOST}:${port}`);
+    console.log(`Easy Recipe Library (${mode} mode, AI ${aiProvider ? 'ON:' + aiProvider : 'off'}, auth ${APP_TOKEN ? 'ON' : 'off'}) -> http://${HOST}:${port}`);
   });
 }
