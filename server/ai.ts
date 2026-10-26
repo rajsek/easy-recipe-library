@@ -147,8 +147,14 @@ export function buildClassifyFn(): ClassifyFn | undefined {
 
 export type ChatOnly = (prompt: string) => Promise<string>;
 
+// Recipe references the answer makes: [[explicit markers]] plus **bolded**
+// spans, which is how the models habitually write dish names. Both are
+// validated against the candidate aliases - a valid marked recipe must never
+// shield an invented unmarked one.
 function markerRefs(text: string): string[] {
-  return [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1].trim());
+  const marked = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1].trim());
+  const bolded = [...text.matchAll(/\*\*([^*]+)\*\*/g)].map((m) => m[1].trim());
+  return [...marked, ...bolded];
 }
 
 // Acceptable reference forms per recipe: the full name and, for names like
@@ -187,7 +193,7 @@ export async function askWithValidation(
     .join('\n');
   const prompt =
     "You are the assistant inside a personal recipe library app. Answer the cook's question using ONLY the verified recipes below. " +
-    'When you mention a recipe, wrap its exact name in [[double brackets]] - no other recipe names may appear in your answer. ' +
+    'When you mention a recipe, wrap its exact name in [[double brackets]] and do not bold or name any other dish - no other recipe names may appear in your answer. ' +
     'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
     'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
     'Keep the answer under 120 words.\n\nVerified recipes:\n' + list +
@@ -203,12 +209,15 @@ export async function askWithValidation(
     );
     bad = markerRefs(out).filter((r) => !aliases.has(r.toLowerCase()));
     if (bad.length > 0) {
-      console.warn('ask-ai rejected answer: non-library recipe references:', bad.join(', '));
+      console.warn('ask-ai rejected answer: non-library recipe reference count:', bad.length);
       throw new Error('AI answer referenced recipes outside the library');
     }
   }
   // Strip markers, normalizing accepted aliases to the canonical full name.
-  return out.replace(/\[\[([^\]]+)\]\]/g, (_m, ref) => aliases.get(String(ref).trim().toLowerCase()) || String(ref)).trim();
+  return out
+    .replace(/\[\[([^\]]+)\]\]/g, (_m, ref) => aliases.get(String(ref).trim().toLowerCase()) || String(ref))
+    .replace(/\*\*([^*]+)\*\*/g, (_m, ref) => aliases.get(String(ref).trim().toLowerCase()) || String(ref))
+    .trim();
 }
 
 export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<string>) | undefined {
