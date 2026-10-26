@@ -250,3 +250,19 @@ test('exclusions are hard regardless of classifier ("no peanut", "without milk")
   const r2 = await pickForMe({}, 'without milk', rows as any, {}, moodRank, async () => ({}));
   assert.ok(!r2.picks.some((p) => /milk/i.test(p.name)), 'milk excluded');
 });
+
+test('veg filter never returns egg-classified cards ("Contains egg"/"Egg")', async () => {
+  const ex = excludedIds([], [], NOW);
+  const r = await pickForMe({ diet: 'Veg' }, '', RECIPES, ex);
+  const names = r.picks.map((p) => p.name).join('|');
+  assert.ok(!/Pancakes|Omelette/.test(names), 'egg-classified cards stay out of veg picks');
+  const eggRows = RECIPES.filter((x) => /egg/i.test(String(x.diet))).map((x) => x.recipe_name);
+  assert.ok(r.picks.every((p) => !eggRows.includes(p.name)), 'no egg-classified row in veg picks');
+});
+
+test('data hygiene: a card tagged Veg must never list egg in its ingredients', () => {
+  const bad = RECIPES.filter(
+    (x) => String(x.diet).trim().toLowerCase() === 'veg' && /\beggs?\b/i.test(String(x.ingredients))
+  );
+  assert.deepEqual(bad.map((b) => b.recipe_name), [], 'Veg-tagged cards containing egg: ' + bad.map((b) => b.recipe_name).join(','));
+});
