@@ -60,6 +60,79 @@ export function wordRe(term: string): RegExp {
   return new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
 }
 
+// ---- bounded typo tolerance for note words ----
+// Source-backed spelling variants seen in Indian-English recipe writing.
+const NOTE_ALIASES: Record<string, string> = {
+  panner: 'paneer',
+  panir: 'paneer',
+};
+
+function editDistanceLe1(a: string, b: string): boolean {
+  if (a === b) return true;
+  const la = a.length, lb = b.length;
+  if (Math.abs(la - lb) > 1) return false;
+  if (la === lb) {
+    let diff = 0;
+    for (let i = 0; i < la; i++) if (a[i] !== b[i] && ++diff > 1) return false;
+    return diff === 1;
+  }
+  const [s, l] = la < lb ? [a, b] : [b, a];
+  let i = 0, j = 0, skipped = false;
+  while (i < s.length) {
+    if (s[i] === l[j]) { i++; j++; continue; }
+    if (skipped) return false;
+    skipped = true; j++;
+  }
+  return true;
+}
+
+/** Food words the verified library actually mentions (names + ingredients). */
+export function noteVocab(recipes: RecipeRow[]): string[] {
+  const words = new Set<string>();
+  for (const r of recipes) {
+    if (String(r.verified).toLowerCase() !== 'yes') continue;
+    const text = (String(r.recipe_name) + ' ' + String(r.ingredients || '')).toLowerCase();
+    for (const w of text.split(/[^a-z]+/)) {
+      if (w.length >= 4 && !NOTE_STOP.has(w)) words.add(w);
+    }
+  }
+  return [...words];
+}
+
+export interface NoteInterpretation { from: string; to: string; }
+
+// Normalizes one note word to a library word only when the match is
+// unambiguous: a source-backed alias, or exactly one edit-distance-1 library
+// word with the same first letter. Ambiguous or unknown words stay as
+// written - the honest no-match path resolves them, never a guess. A
+// normalized word is still a HARD constraint; matching never relaxes.
+export function normalizeNoteWord(word: string, vocab: string[]): { word: string; interpreted?: NoteInterpretation } {
+  const w = String(word || '').toLowerCase();
+  if (NOTE_ALIASES[w]) return { word: NOTE_ALIASES[w], interpreted: { from: word, to: NOTE_ALIASES[w] } };
+  if (w.length < 4 || vocab.indexOf(w) !== -1) return { word };
+  const cand = vocab.filter((v) => v[0] === w[0] && editDistanceLe1(w, v));
+  if (cand.length === 1) return { word: cand[0], interpreted: { from: word, to: cand[0] } };
+  return { word };
+}
+
+export function normalizeNoteWords(words: string[], vocab: string[]): { words: string[]; interpreted: NoteInterpretation[]; pairs: { orig: string; word: string; interpreted?: NoteInterpretation }[] } {
+  const interpreted: NoteInterpretation[] = [];
+  const pairs = words.map((orig) => {
+    const n = normalizeNoteWord(orig, vocab);
+    if (n.interpreted) interpreted.push(n.interpreted);
+    return { orig, word: n.word, interpreted: n.interpreted };
+  });
+  return { words: [...new Set(pairs.map((p) => p.word))], interpreted, pairs };
+}
+
+function coverageNote(label: string, words: string[], pool: RecipeRow[]): string {
+  const counts = words.map((k) => {
+    const re = wordRe(k);
+    return pool.filter((r) => re.test(r.recipe_name + ' ' + (r.ingredients || ''))).length + ' list "' + k + '"';
+  });
+  return 'checked ' + pool.length + ' verified ' + label + ' recipes: ' + (counts.length ? counts.join(', ') : 'no note words to check');
+}
+
 export function parseNote(note: string): { exclusions: string[]; keywords: string[] } {
   const exclusions: string[] = [];
   let rest = ' ' + String(note || '').toLowerCase().replace(/[,;!?]/g, '.').replace(/[^a-z\s.-]/g, ' ') + ' ';
@@ -111,14 +184,19 @@ export function constrainAskCandidates(
   candidates: RecipeRow[],
   question: string,
   excluded: AskExclusions,
-  classification: Record<string, string>
-): { candidates: RecipeRow[]; zeroReason?: string } {
+  classification: Record<string, string>,
+  vocab?: string[]
+): { candidates: RecipeRow[]; zeroReason?: string; interpreted: NoteInterpretation[] } {
   const parsed = parseNote(question);
+  const v = vocab || noteVocab(candidates);
+  const exN = normalizeNoteWords(parsed.exclusions, v);
+  const kwN = normalizeNoteWords(parsed.keywords, v);
+  const interpreted = [...exN.interpreted, ...kwN.interpreted];
   let out = candidates;
-  if (parsed.exclusions.length > 0) {
+  if (exN.words.length > 0) {
     out = out.filter((r) => {
       const hay = r.recipe_name + ' ' + (r.ingredients || '');
-      return !parsed.exclusions.some((x) => wordRe(x).test(hay));
+      return !exN.words.some((x) => wordRe(x).test(hay));
     });
   }
   const q = question.toLowerCase();
@@ -133,18 +211,28 @@ export function constrainAskCandidates(
       return ts.length >= 4 && (ts === short || short.startsWith(ts) || ts.startsWith(short));
     });
   });
-  const foodWords = parsed.keywords.filter((k) => classification[k] === 'food' && !ASK_REQUEST_WORDS.has(k));
+  // A word normalized to a library ingredient IS an ingredient constraint
+  // even if the classifier could not place the original typo.
+  const foodWords = kwN.pairs
+    .filter((p) => (classification[p.orig] === 'food' || p.interpreted) && !ASK_REQUEST_WORDS.has(p.word))
+    .map((p) => p.word);
   if (foodWords.length > 0) {
     const matched = out.filter((r) => {
       const hay = r.recipe_name + ' ' + (r.ingredients || '');
       return foodWords.some((k) => wordRe(k).test(hay));
     });
     if (matched.length === 0) {
-      return { candidates: [], zeroReason: 'no verified recipe in the library matches ' + foodWords.map((k) => '"' + k + '"').join(', ') + ' under these filters - nothing invented to fill the gap' };
+      return {
+        candidates: [],
+        interpreted,
+        zeroReason: 'No verified recipe matches everything - ' + coverageNote('library', foodWords, out) +
+          (interpreted.length > 0 ? '; interpreted ' + interpreted.map((i) => '"' + i.from + '" as "' + i.to + '"').join(', ') : '') +
+          '. Nothing invented to fill the gap - a library gap, not proof the dish does not exist.',
+      };
     }
     out = matched;
   }
-  return { candidates: out };
+  return { candidates: out, interpreted };
 }
 
 // The single source of truth for "which recipes may be shown under these
@@ -170,6 +258,7 @@ export interface PickResult {
   usedAI: boolean;
   note: string;
   noteInfo: string;
+  interpreted?: NoteInterpretation[];
   picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[];
   ids: string[];
 }
@@ -266,25 +355,32 @@ export async function pickForMe(
   let noteInfo = '';
   let noteZeroMatch = false;
   const parsed = note && note.trim() ? parseNote(note) : { exclusions: [] as string[], keywords: [] as string[] };
+  const vocab = noteVocab(recipes);
+  const exN = normalizeNoteWords(parsed.exclusions, vocab);
+  const kwN = normalizeNoteWords(parsed.keywords, vocab);
+  const interpreted = [...exN.interpreted, ...kwN.interpreted];
   const parts: string[] = [];
-  if (parsed.exclusions.length > 0) {
+  if (interpreted.length > 0) {
+    parts.push('interpreted ' + interpreted.map((i) => '"' + i.from + '" as "' + i.to + '"').join(', '));
+  }
+  if (exN.words.length > 0) {
     candidates = candidates.filter((r) => {
       const hay = r.recipe_name + ' ' + (r.ingredients || '');
-      return !parsed.exclusions.some((x) => wordRe(x).test(hay));
+      return !exN.words.some((x) => wordRe(x).test(hay));
     });
-    parts.push('excluded recipes containing ' + parsed.exclusions.map((x) => '"' + x + '"').join(', '));
+    parts.push('excluded recipes containing ' + exN.words.map((x) => '"' + x + '"').join(', '));
   }
-  if (parsed.keywords.length > 0) {
+  if (kwN.words.length > 0) {
     // An explicit word in the note is a HARD requirement: a pick that does
     // not mention it is wrong, never "close enough". AI ranking, when on,
     // only re-orders whatever survives this filter.
     const matched = candidates.filter((r) => {
       const hay = r.recipe_name + ' ' + (r.ingredients || '');
-      return parsed.keywords.some((k) => wordRe(k).test(hay));
+      return kwN.words.some((k) => wordRe(k).test(hay));
     });
     if (matched.length > 0) {
       candidates = matched;
-      parts.push('showing only recipes whose name or ingredients match ' + parsed.keywords.map((k) => '"' + k + '"').join(', '));
+      parts.push('showing only recipes whose name or ingredients match at least one of ' + kwN.words.map((k) => '"' + k + '"').join(', '));
     } else if (rankFn) {
       // A word nothing mentions literally may only become a soft
       // ranked-by-meaning wish when the classifier says it is clearly a
@@ -294,21 +390,23 @@ export async function pickForMe(
       let allMood = false;
       if (classifyFn) {
         try {
-          const cls = await classifyFn(parsed.keywords);
-          allMood = parsed.keywords.every((k) => cls[k] === 'mood');
+          const cls = await classifyFn(kwN.words);
+          allMood = kwN.words.every((k) => cls[k] === 'mood');
         } catch { allMood = false; }
       }
       if (allMood) {
-        parts.push('no recipe name or ingredient mentions ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
+        parts.push('no recipe name or ingredient mentions ' + kwN.words.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
       } else {
+        const coverage = coverageNote([filter.diet, filter.meal].filter(Boolean).join(' ') || 'unfiltered', kwN.words, candidates);
         candidates = [];
         noteZeroMatch = true;
-        parts.push('no verified recipe matches ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' under these filters - nothing filled in; try fewer filters or a different note');
+        parts.push('no verified recipe matches everything - ' + coverage + '. Nothing filled in; this is a gap in the checked library, not proof the dish does not exist');
       }
     } else {
+      const coverage = coverageNote([filter.diet, filter.meal].filter(Boolean).join(' ') || 'unfiltered', kwN.words, candidates);
       candidates = [];
       noteZeroMatch = true;
-      parts.push('no verified recipe matches ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' under these filters - nothing filled in; try fewer filters or a different note');
+      parts.push('no verified recipe matches everything - ' + coverage + '. Nothing filled in; this is a gap in the checked library, not proof the dish does not exist');
     }
   }
   if (note && note.trim() && !rankFn) {
@@ -347,6 +445,7 @@ export async function pickForMe(
 
   const ids = chosen.map((r) => videoIdOf(r.video_url));
   return {
+    interpreted,
     count: chosen.length,
     usedAI,
     noteInfo,
