@@ -111,3 +111,20 @@ test('pick fills a thin checked pool with labelled video alternatives', async ()
     assert.ok(!j.picks.some((p: any) => String(p.url).includes(v.video_id)), 'no alternative duplicates a picked card');
   }
 });
+
+test('zero checked picks still get labelled video alternatives (no dead end)', async () => {
+  // Exhaust the corn pool in this process (demo memory exclusions accumulate),
+  // then the response with 0 picks must still offer the corn videos.
+  let j: any = null;
+  for (let i = 0; i < 6; i++) {
+    const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
+    assert.equal(r.status, 200);
+    j = await r.json();
+    if (j.picks.length === 0) break;
+  }
+  assert.equal(j.picks.length, 0, 'corn pool exhausted in this instance');
+  assert.ok(Array.isArray(j.videos) && j.videos.length >= 3, 'video alternatives present even with zero picks, got ' + JSON.stringify(j.videos && j.videos.length));
+  for (const v of j.videos) {
+    assert.ok(typeof v.status === 'string' && v.status.includes('details not extracted yet'));
+  }
+});
