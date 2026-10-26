@@ -404,13 +404,13 @@ export default function App() {
                 )}
                 target="_blank" rel="noopener"
               >Open WhatsApp to ask</a>{' '}
-              <button className="btn" onClick={doAsk} disabled={askState === 'sending' || askState === 'pending'}>
-                {askState === 'sending' ? 'Sending...' : askState === 'pending' ? 'Waiting for the reply (about 15 min)...' : 'Ask in the app (reply in about 15 min)'}
+              <button className="btn" disabled title="Being set up - not live yet">
+                Ask Instinct here (coming soon)
               </button>
             </p>
-            {askState === 'pending' && <p className="muted span-all">Request sent. The reply appears here when it is ready; this is not instant.</p>}
-            {askState === 'done' && <div className="card span-all"><div className="cardbody"><h3>Reply</h3><p style={{ whiteSpace: 'pre-wrap' }}>{askAnswer}</p></div></div>}
-            {askState === 'error' && <p className="muted span-all">{askError}</p>}
+            {pickResult.usedAI && (
+              <p className="muted span-all">Reasons are AI taste suggestions, not nutrition, allergy or safety guarantees.</p>
+            )}
             {pickResult.picks.map((p) => (
               <article className="card" key={p.name}>
                 <a className="thumb" href={p.url} target="_blank" rel="noopener">
