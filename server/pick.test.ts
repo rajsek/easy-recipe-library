@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { pickForMe, excludedIds, videoIdOf } from './pick.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const demo = JSON.parse(readFileSync(path.join(__dirname, 'demo-data.json'), 'utf8'));
+const demo = JSON.parse(readFileSync(path.join(__dirname, 'test-fixtures.json'), 'utf8'));
 
 function rowsFromGrid(values: any[][]): any[] {
   const hdr = values[0].map(String);
@@ -335,4 +335,18 @@ test('ask route zero: coverage + interpretation in the reason', async () => {
   assert.deepEqual(interpreted, [{ from: 'panner', to: 'paneer' }]);
   assert.ok(/0 list "paneer"/.test(zeroReason || ''), zeroReason);
   assert.ok(/library gap/.test(zeroReason || ''), zeroReason);
+});
+
+test('dietClass: "Veg (needs eggless mayo dip)" is veg-conditional - excluded from BOTH Veg and Non-veg picks', async () => {
+  const { dietClass, filterCandidateRecipes } = await import('./pick.js');
+  assert.equal(dietClass('Veg (needs eggless mayo dip)'), 'veg-conditional');
+  const rows = [
+    { recipe_name: 'Plain Salad', video_url: 'https://www.youtube.com/watch?v=JJJJJJJJJJ1', diet: 'Veg', meal_type: 'side', ingredients: 'cucumber, tomato', verified: 'yes' },
+    { recipe_name: 'Mayo Chips', video_url: 'https://www.youtube.com/watch?v=JJJJJJJJJJ2', diet: 'Veg (needs eggless mayo dip)', meal_type: 'side', ingredients: 'potato; dip: mayonnaise', verified: 'yes' },
+  ];
+  const veg = filterCandidateRecipes(rows as any, { diet: 'Veg' }).map((r) => r.recipe_name);
+  const nonveg = filterCandidateRecipes(rows as any, { diet: 'Non-veg' }).map((r) => r.recipe_name);
+  assert.deepEqual(veg, ['Plain Salad'], 'conditional card stays out of strict Veg picks');
+  assert.deepEqual(nonveg, [], 'conditional card is not Non-veg either');
+  assert.equal(filterCandidateRecipes(rows as any, {}).length, 2, 'both visible unfiltered');
 });
