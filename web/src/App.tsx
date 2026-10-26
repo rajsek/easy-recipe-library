@@ -243,6 +243,9 @@ export default function App() {
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const [pickResult, setPickResult] = useState<PickResult | null>(null);
   const [picking, setPicking] = useState(false);
+  const [askState, setAskState] = useState<'idle' | 'sending' | 'pending' | 'done' | 'error'>('idle');
+  const [askAnswer, setAskAnswer] = useState('');
+  const [askError, setAskError] = useState('');
 
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
@@ -266,6 +269,34 @@ export default function App() {
     if (fq) params.set('q', fq);
     apiFetch('/api/videos?' + params).then((r) => r.json()).then(setVideos).catch(() => setVideos([]));
   }, [tab, fch, fdiet, fq]);
+
+  async function doAsk() {
+    setAskState('sending'); setAskError(''); setAskAnswer('');
+    try {
+      const r = await apiFetch('/api/ask', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diet: pdiet, meal: pmeal, note: pnote })
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not send'); }
+      const { request_id } = await r.json();
+      setAskState('pending');
+      const deadline = Date.now() + 12 * 60 * 1000;
+      const poll = async () => {
+        try {
+          const pr = await apiFetch('/api/ask/' + request_id);
+          if (pr.ok) {
+            const data = await pr.json();
+            if (data.status === 'done') { setAskAnswer(data.answer); setAskState('done'); return; }
+          }
+        } catch { /* keep polling */ }
+        if (Date.now() < deadline) setTimeout(poll, 20000);
+        else { setAskError('Still waiting - replies usually land within about 15 minutes. Come back to this tab later.'); setAskState('error'); }
+      };
+      setTimeout(poll, 20000);
+    } catch (e: any) {
+      setAskError(e.message || 'could not send the request'); setAskState('error');
+    }
+  }
 
   async function doPick() {
     setPicking(true); setPickResult(null);
@@ -372,8 +403,14 @@ export default function App() {
                   '\nPlease pick from my recipe library.'
                 )}
                 target="_blank" rel="noopener"
-              >Open WhatsApp to ask</a>
+              >Open WhatsApp to ask</a>{' '}
+              <button className="btn" onClick={doAsk} disabled={askState === 'sending' || askState === 'pending'}>
+                {askState === 'sending' ? 'Sending...' : askState === 'pending' ? 'Waiting for the reply (about 15 min)...' : 'Ask in the app (reply in about 15 min)'}
+              </button>
             </p>
+            {askState === 'pending' && <p className="muted span-all">Request sent. The reply appears here when it is ready; this is not instant.</p>}
+            {askState === 'done' && <div className="card span-all"><div className="cardbody"><h3>Reply</h3><p style={{ whiteSpace: 'pre-wrap' }}>{askAnswer}</p></div></div>}
+            {askState === 'error' && <p className="muted span-all">{askError}</p>}
             {pickResult.picks.map((p) => (
               <article className="card" key={p.name}>
                 <a className="thumb" href={p.url} target="_blank" rel="noopener">
