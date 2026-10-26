@@ -95,78 +95,95 @@ function ActionButtons({ id, title, onSaved }: { id: string; title: string; onSa
 }
 
 
-// Small at-a-glance icons for ingredients. Icons never replace the text: the
-// exact sourced ingredient (with quantity) always stays visible, and items
-// with no confident keyword match get a plain bullet, not a guessed icon.
+// At-a-glance ingredient icons: bundled inline SVGs (deterministic, no font or
+// network dependency), each with an accessible category label. Icons only aid
+// scanning - the exact sourced text always stays visible, and anything with no
+// confident category gets a neutral dot, never a guessed icon.
+const ICON_SVG: Record<string, string> = {
+  onion: '<circle cx="12" cy="14" r="6.5"/><path d="M12 7.5V3M9.5 10.5c-1 1.6-1 3.8 0 5.6M14.5 10.5c1 1.6 1 3.8 0 5.6"/>',
+  tomato: '<circle cx="12" cy="13.5" r="6.5"/><path d="M12 7V4.5M8.8 7.5 12 9.2l3.2-1.7"/>',
+  garlic: '<path d="M12 4.5c1.8 2.2 4.5 5.2 4.5 9a4.5 4.5 0 0 1-9 0c0-3.8 2.7-6.8 4.5-9z"/><path d="M12 4.5V3M10.5 18.5 9.8 20M13.5 18.5l.7 1.5M12 18.5V20"/>',
+  root: '<ellipse cx="12" cy="13.5" rx="5.5" ry="7" transform="rotate(20 12 13.5)"/><path d="M14.5 7c1-2 2.5-3 4.5-3.5M14.5 7c-0.5-2-0.2-3.5 1-4.8"/>',
+  chilli: '<path d="M8 7.5c-2.5 6 1.5 11.5 8 12 3.2.2 5.5-1 5.5-1s-3 .3-6-.5C12 16.8 9.5 12.7 10.5 8c.3-1.4-1.6-1.9-2.5-.5z"/><path d="M10.5 8c.2-2 1.4-3.2 3.2-3.6"/>',
+  spice: '<rect x="7" y="9.5" width="10" height="10.5" rx="2"/><path d="M9.5 9.5V7.5h5v2M10.5 7.5v-2h3v2M10 13.5h.01M14 13.5h.01M12 16.5h.01"/>',
+  grain: '<path d="M12 21V8"/><path d="M12 8c0-2.8-1.8-4.5-4.5-4.5C7.5 6.5 9.4 8 12 8zM12 8c0-2.8 1.8-4.5 4.5-4.5C16.5 6.5 14.6 8 12 8zM12 13.5c0-2.8-1.8-4.5-4.5-4.5 0 3 1.9 4.5 4.5 4.5zM12 13.5c0-2.8 1.8-4.5 4.5-4.5 0 3-1.9 4.5-4.5 4.5z"/>',
+  oil: '<path d="M10 3.5h4V6l2 3v10a1.5 1.5 0 0 1-1.5 1.5h-5A1.5 1.5 0 0 1 8 19V9l2-3z"/><path d="M8 12h8"/>',
+  dairy: '<path d="M7.5 9.5 10 4h4l2.5 5.5V20h-9z"/><path d="M7.5 9.5h9M12 9.5V4"/>',
+  egg: '<path d="M12 4.5c2.6 3 4.8 6.4 4.8 9.7a4.8 4.8 0 0 1-9.6 0c0-3.3 2.2-6.7 4.8-9.7z"/>',
+  meat: '<circle cx="9" cy="9" r="5"/><path d="m12.6 12.6 4.2 4.2"/><circle cx="18.6" cy="15.9" r="1.5"/><circle cx="15.9" cy="18.6" r="1.5"/>',
+  fish: '<path d="M6.5 12c2.3-2.8 5-4 8.5-4 2.8 0 4.8 1.7 6 4-1.2 2.3-3.2 4-6 4-3.5 0-6.2-1.2-8.5-4z"/><path d="M6.5 12 3.5 9v6z"/><circle cx="15.5" cy="11" r=".7" fill="currentColor" stroke="none"/>',
+  legume: '<path d="M9 4.5c5.5.5 10.5 5.5 10.5 10.5a4.5 4.5 0 0 1-4.5 4.5C9.5 19.5 4.5 13.5 4.5 9A4.5 4.5 0 0 1 9 4.5z"/><path d="M9.5 8.5c2.8 1 5.5 3.8 6.5 7"/>',
+  nut: '<ellipse cx="12" cy="8" rx="3.8" ry="4.4"/><ellipse cx="12" cy="16.2" rx="3.8" ry="4.4"/>',
+  veg: '<path d="M12 13v7M8.5 20.5h7"/><circle cx="8.3" cy="9.5" r="3.3"/><circle cx="15.7" cy="9.5" r="3.3"/><circle cx="12" cy="6.8" r="3.3"/>',
+  herb: '<path d="M12 21v-8"/><path d="M12 13c-3.8 0-6-2.4-6-6 3.6 0 6 2.2 6 6zM12 13c3.8 0 6-2.4 6-6-3.6 0-6 2.2-6 6z"/>',
+  fruit: '<circle cx="12" cy="13.5" r="6.3"/><path d="M12 7.2V4.5M12 7.2c0-1.8 1.2-2.9 3-3.2.2 1.8-1 3-3 3.2z"/>',
+  sweet: '<rect x="6.5" y="8" width="11" height="11" rx="1.5"/><path d="M6.5 13.5h11M12 8v11"/>',
+  water: '<path d="M12 3.5c2.5 3.5 5.3 6.8 5.3 10.3a5.3 5.3 0 0 1-10.6 0C6.7 10.3 9.5 7 12 3.5z"/>',
+  generic: '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>'
+};
 const ING_ICONS: [RegExp, string][] = [
-  [/rice|arisi/i, '🍚'], [/\bdal\b|paruppu|lentil/i, '🫘'], [/onion|shallot|vengayam/i, '🧅'],
-  [/tomato|thakkali/i, '🍅'], [/garlic|poondu/i, '🧄'], [/ginger|inji/i, '🫚'],
-  [/green chilli|red chilli|chilli|chili|milagai/i, '🌶️'], [/pepper|milagu/i, '🌶️'],
-  [/oil|ennai/i, '🫗'], [/ghee|nei\b/i, '🧈'], [/butter/i, '🧈'],
-  [/salt|uppu/i, '🧂'], [/sugar/i, '🍬'], [/jaggery|vellam/i, '🍯'],
-  [/honey/i, '🍯'], [/milk|paal/i, '🥛'], [/curd|yogurt|thayir/i, '🥣'],
-  [/^\d*\s*egg|\beggs?\b|muttai/i, '🥚'], [/chicken|kozhi/i, '🍗'],
-  [/mutton|lamb/i, '🍖'], [/fish|meen/i, '🐟'], [/prawn|shrimp|eral/i, '🦐'], [/crab/i, '🦀'],
-  [/potato|aloo|urulai/i, '🥔'], [/carrot/i, '🥕'], [/beans\b/i, '🫛'],
-  [/peas\b|pattani/i, '🫛'], [/capsicum|bell pepper/i, '🫑'], [/brinjal|eggplant|kathirikai/i, '🍆'],
-  [/coconut|thengai/i, '🥥'], [/turmeric|manjal/i, '🟡'], [/tamarind|puli/i, '🟤'],
-  [/coriander leaves|cilantro|kothamalli/i, '🌿'], [/curry leaves|karuveppilai/i, '🌿'], [/mint|pudina/i, '🌿'],
-  [/spinach|keerai|greens/i, '🥬'], [/cabbage/i, '🥬'], [/cauliflower|broccoli/i, '🥦'], [/cucumber/i, '🥒'],
-  [/corn\b/i, '🌽'], [/mushroom|kaalan/i, '🍄'], [/lemon/i, '🍋'], [/banana|vazhai/i, '🍌'],
-  [/wheat flour|atta|maida|flour\b|maavu/i, '🌾'], [/besan|gram flour|kadalai maavu/i, '🌾'],
-  [/rava|semolina|sooji/i, '🌾'], [/jowar|millet|cholam/i, '🌾'], [/bread/i, '🍞'],
-  [/peanut|groundnut|nilakadalai/i, '🥜'], [/cashew|almond|nut/i, '🌰'],
-  [/paneer|cheese/i, '🧀'], [/soya|meal maker/i, '🫘'], [/water|thanni/i, '💧'],
-  [/turmeric|cumin|jeera|seeragam/i, '🌾'],
-  [/coriander powder|cumin powder|fennel|sombu|cardamom|elakkai|cinnamon|pattai|clove|krambu|ajwain|omam|masala|hing|perungayam|mustard|kadugu|spice/i, '🫙']
+  [/coriander leaves|cilantro|kothamalli|curry leaves|karuveppilai|mint|pudina/i, 'herb'],
+  [/onion|shallot|vengayam/i, 'onion'], [/tomato|thakkali/i, 'tomato'], [/garlic|poondu/i, 'garlic'],
+  [/green chilli|red chilli|chilli|chili|milagai|pepper|milagu/i, 'chilli'],
+  [/potato|aloo|urulai|carrot|beetroot|ginger|inji|radish|mullangi/i, 'root'],
+  [/turmeric|manjal|cumin|jeera|seeragam|coriander powder|fennel|sombu|cardamom|elakkai|cinnamon|pattai|clove|krambu|ajwain|omam|masala|hing|perungayam|mustard|kadugu|tamarind|puli|salt|uppu|spice/i, 'spice'],
+  [/rice|arisi|wheat|atta|maida|flour|maavu|besan|gram flour|rava|semolina|sooji|jowar|millet|cholam|bread|poha|aval|oats/i, 'grain'],
+  [/\bdal\b|paruppu|lentil|soya|meal maker|\bbeans\b|\bpeas\b|pattani|chana|chickpea|kadalai|gram\b/i, 'legume'],
+  [/oil|ennai/i, 'oil'],
+  [/ghee|nei\b|butter|milk|paal|curd|yogurt|thayir|paneer|cheese|cream/i, 'dairy'],
+  [/^\d*\s*egg|\beggs?\b|muttai/i, 'egg'],
+  [/chicken|kozhi|mutton|lamb|\bmeat\b|beef|pork/i, 'meat'],
+  [/fish|meen|prawn|shrimp|eral|crab|nandu/i, 'fish'],
+  [/coconut|thengai|cashew|almond|peanut|groundnut|nilakadalai|\bnuts?\b|munthiri/i, 'nut'],
+  [/spinach|keerai|greens|cabbage|cauliflower|broccoli|brinjal|eggplant|kathirikai|cucumber|corn\b|okra|vendakkai|mushroom|kaalan|capsicum|bell pepper|karamani|drumstick|murungai|beans\b/i, 'veg'],
+  [/lemon|elumichai|banana|vazhai|apple|mango|mambazham|pineapple|grapes/i, 'fruit'],
+  [/sugar|jaggery|vellam|honey|then\b|chocolate|cocoa/i, 'sweet'],
+  [/water|thanni|coconut milk/i, 'water']
 ];
-// Older phones lack the newest emoji; test support once and fall back to a
-// plain bullet so nobody sees empty boxes.
-const _emojiOk: Record<string, boolean> = {};
-function emojiSupported(icon: string): boolean {
-  if (icon in _emojiOk) return _emojiOk[icon];
-  let ok = true;
-  try {
-    const cv = document.createElement('canvas');
-    cv.width = 24; cv.height = 24;
-    const c = cv.getContext('2d');
-    const draw = (ch: string) => {
-      c!.clearRect(0, 0, 24, 24);
-      c!.font = '16px system-ui';
-      c!.textBaseline = 'top';
-      c!.fillText(ch, 0, 0);
-      return c!.getImageData(0, 0, 24, 24).data.join();
-    };
-    // An unsupported emoji rasterizes to the same hollow box as a deliberately
-    // invalid codepoint; supported ones draw different pixels.
-    ok = !!c && draw(icon) !== draw('\u{10FFFD}');
-  } catch { ok = false; }
-  _emojiOk[icon] = ok;
-  return ok;
+function ingIconKey(item: string): string {
+  for (const [re, key] of ING_ICONS) if (re.test(item)) return key;
+  return 'generic';
 }
-function ingIcon(item: string): string {
-  for (const [re, icon] of ING_ICONS) if (re.test(item)) return emojiSupported(icon) ? icon : '•';
-  return '•';
+function IngIcon({ item }: { item: string }) {
+  const k = ingIconKey(item);
+  const svg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (ICON_SVG[k] || ICON_SVG.generic) + '</svg>';
+  return <span className="ingicon" role="img" aria-label={k === 'generic' ? 'ingredient' : k} title={k === 'generic' ? 'ingredient' : k} dangerouslySetInnerHTML={{ __html: svg }} />;
+}
+
+/**
+ * Splits sourced ingredient prose into display items WITHOUT losing meaning:
+ * a new item starts only at a sentence boundary or where a quantity/label
+ * leads the segment ("200g soya chunks", "1 tsp pepper", "Spice powder: 2 tsp
+ * coriander"). Bare prep fragments ("grind", "dry roast 2 min") stay attached
+ * to the ingredient they belong to instead of becoming fake grocery items.
+ * The text itself is never rewritten - only grouped.
+ */
+function splitIngredients(text: string): string[] {
+  const qtyLead = /^(\D{0,9})(\d|½|¼|¾|a pinch|a few|handful|one\b|two\b)/i;
+  const items: string[] = [];
+  for (const sentence of String(text || '').split(/\. (?=[A-Z])/)) {
+    let cur = '';
+    for (const part of sentence.split(/,\s*/)) {
+      const t = part.trim();
+      if (!t) continue;
+      if (cur === '' || qtyLead.test(t)) {
+        if (cur) items.push(cur);
+        cur = t;
+      } else {
+        cur += ', ' + t;
+      }
+    }
+    if (cur) items.push(cur);
+  }
+  return items.map((s) => s.replace(/\.$/, ''));
 }
 function IngredientList({ text }: { text: string }) {
-  // Split into sentence chunks, then comma items; a new sentence starts at
-  // ". " followed by an uppercase letter, so decimals like "1.5" stay intact.
-  const items = String(text || '')
-    .split(/\. (?=[A-Z])/)
-    .flatMap((s) => s.split(/,\s*/))
-    .map((s) => s.trim().replace(/\.$/, ''))
-    .filter(Boolean);
+  const items = splitIngredients(text);
   return (
     <ul className="inglist">
-      {items.map((it, i) => {
-        const icon = ingIcon(it);
-        return (
-          <li key={i}>
-            <span className="ingicon" aria-hidden="true">{icon}</span>
-            <span>{it}</span>
-          </li>
-        );
-      })}
+      {items.map((it, i) => (
+        <li key={i}><IngIcon item={it} /><span>{it}</span></li>
+      ))}
     </ul>
   );
 }
@@ -286,7 +303,7 @@ export default function App() {
         <div className="wrap">
           <h1>Easy Recipe Library</h1>
           <div className={dataMode === 'demo' ? 'modebadge demo' : 'modebadge live'}>
-            {dataMode === 'demo' ? 'Demo data - changes are not saved' : 'LIVE - your Google Sheet'}
+            {dataMode === 'demo' ? 'Demo - picks and saves reset on restart' : 'LIVE - your Google Sheet'}
           </div>
         </div>
       </header>
