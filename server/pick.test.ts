@@ -503,3 +503,13 @@ test('dish filter: zero name matches is honest, never filled from elsewhere', as
   assert.match(r.noteInfo, /no checked recipe name matches the selected dish/);
   assert.match(r.noteInfo, /Nothing filled in from elsewhere/);
 });
+
+
+test('dish zero after history names the real no-repeat cause, not library absence', async () => {
+  const pongal = dishRows.find((r) => r.recipe_name.startsWith('Ven Pongal'))!;
+  const r = await pickForMe({ dishes: ['Ven Pongal'] }, 'rice', dishRows, { [videoIdOf(pongal.video_url)]: true });
+  assert.equal(r.picks.length, 0);
+  assert.match(r.noteInfo, /already suggested in the last 30 days/);
+  assert.match(r.noteInfo, /Ven Pongal/);
+  assert.doesNotMatch(r.noteInfo, /no checked recipe name matches/);
+});

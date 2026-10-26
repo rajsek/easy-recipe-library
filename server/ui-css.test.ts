@@ -36,3 +36,11 @@ test('checkbox list text meets WCAG AA contrast on its own panel background', ()
   const ratio = contrast(rootVar(itemColor), listBg);
   assert.ok(ratio >= 4.5, `.cbitem text on .cblist background: contrast ${ratio.toFixed(2)} < 4.5`);
 });
+
+// Request-shape regression guard complements the runnable browser matrix.
+test('Load-more sends the captured composed ingredient note, never the raw input alone', () => {
+  const app = readFileSync(new URL('../web/src/App.tsx', import.meta.url), 'utf8');
+  assert.match(app, /setPickForm\(\{ note: pnote, composed: composedNote\(\)/);
+  assert.match(app, /note: pickForm\.composed, dishes: pickForm\.dishes, seen: seenIds/);
+  assert.doesNotMatch(app, /note: pickForm\.note, dishes: pickForm\.dishes, seen: seenIds/);
+});
