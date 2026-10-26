@@ -135,7 +135,9 @@ a.rowtitle:hover { color:var(--leaf); }
 /* Browsable checkbox lists (Dishes / Ingredients): no typing needed. */
 .cblistwrap { margin: 6px 0; }
 .cblist { max-height: 190px; overflow-y: auto; border: 1px solid var(--line, #ccc); border-radius: 8px; background: #fff; padding: 4px 8px; margin-top: 6px; }
-.cbitem { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 14px; cursor: pointer; }
+.cbitem { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 14px; cursor: pointer; color: var(--ink); border-radius: 6px; padding: 0 4px; margin: 0 -4px; }
+.cbitem:hover { background: var(--leaf-tint); }
+.cbitem input:focus-visible { outline: 2px solid var(--leaf); outline-offset: 1px; }
 .cbitem input { width: 18px; height: 18px; flex: none; }
 .cblisthead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .cblisthead .cnt { font-size: 12px; }
