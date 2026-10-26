@@ -135,26 +135,57 @@ export function buildClassifyFn(): ClassifyFn | undefined {
   };
 }
 
-// Free-question answering for the app's "Instant AI answer" mode. Same
-// advisory-only contract: it can only talk about the verified recipes it is
-// given, it cannot change picks/filters, and it must refuse medical,
-// nutrition or allergy advice and off-topic questions.
+// Free-question answering for the app's "Instant AI answer" mode. The hard
+// constraints are enforced OUTSIDE the model: index.ts passes only
+// filterCandidateRecipes() output (verified-only, diet/meal rules identical
+// to picks), and every recipe the answer names must be wrapped in
+// [[exact name]] markers that are validated server-side against that list.
+// An answer referencing anything outside the candidate list is retried once
+// with a correction, then rejected with an honest error - never shown.
+// Provider failures (including free-quota exhaustion) surface as honest
+// errors; there is no paid fallback anywhere.
+
+export type ChatOnly = (prompt: string) => Promise<string>;
+
+function markerRefs(text: string): string[] {
+  return [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1].trim());
+}
+
+export async function askWithValidation(
+  chat: ChatOnly,
+  recipes: RecipeRow[],
+  question: string,
+  filter: PickFilter
+): Promise<string> {
+  const names = new Set(recipes.map((r) => r.recipe_name));
+  const list = recipes
+    .slice(0, 60)
+    .map((r) => '- ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
+    .join('\n');
+  const prompt =
+    "You are the assistant inside a personal recipe library app. Answer the cook's question using ONLY the verified recipes below. " +
+    'When you mention a recipe, wrap its exact name in [[double brackets]] - no other recipe names may appear in your answer. ' +
+    'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
+    'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
+    'Keep the answer under 120 words.\n\nVerified recipes:\n' + list +
+    '\n\nFilters: ' + JSON.stringify(filter || {}) +
+    '\nQuestion: ' + question + '\nAnswer:';
+  let out = await chat(prompt);
+  let bad = markerRefs(out).filter((r) => !names.has(r));
+  if (bad.length > 0) {
+    out = await chat(
+      prompt +
+      '\n\nYour previous answer referenced recipes that are NOT in the library: ' + bad.join(', ') +
+      '. Answer again: use [[exact names]] from the list only, or no recipe references at all.'
+    );
+    bad = markerRefs(out).filter((r) => !names.has(r));
+    if (bad.length > 0) throw new Error('AI answer referenced recipes outside the library');
+  }
+  return out.replace(/\[\[|\]\]/g, '').trim();
+}
+
 export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<string>) | undefined {
   const { chat } = resolveChat();
   if (!chat) return undefined;
-  return async (recipes, question, filter) => {
-    const list = recipes
-      .filter((r) => String(r.verified).toLowerCase() === 'yes')
-      .slice(0, 60)
-      .map((r) => '- ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
-      .join('\n');
-    const prompt =
-      "You are the assistant inside a personal recipe library app. Answer the cook's question using ONLY the verified recipes below. " +
-      'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
-      'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
-      'Keep the answer under 120 words.\n\nVerified recipes:\n' + list +
-      '\n\nFilters: ' + JSON.stringify(filter || {}) +
-      '\nQuestion: ' + question + '\nAnswer:';
-    return (await chat(prompt)).trim();
-  };
+  return (recipes, question, filter) => askWithValidation(chat, recipes, question, filter);
 }
