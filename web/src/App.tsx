@@ -339,7 +339,7 @@ export default function App() {
         <div className="wrap">
           <h1>Easy Recipe Library</h1>
           <div className={dataMode === 'demo' ? 'modebadge demo' : 'modebadge live'}>
-            {dataMode === 'demo' ? 'Demo - picks and saves reset on restart' : 'LIVE - your Google Sheet'}
+            {dataMode === 'demo' ? 'Recipe copy as of 26 Oct 2026 (not live) - saves/history reset on restart' : 'LIVE - your Google Sheet'}
           </div>
         </div>
       </header>
@@ -369,7 +369,7 @@ export default function App() {
           <section className="pickpanel">
             <h2>Tonight's ideas</h2>
             <p className="muted small">{dataMode === 'demo'
-              ? 'Suggestions come only from checked recipes. Repeats are avoided only while this demo\'s memory lasts - it resets without warning.'
+              ? 'Suggestions come only from checked recipes in a snapshot copy of your library (refreshed by the owner when the Sheet changes). Repeats are avoided only while this copy\'s memory lasts - it resets without warning.'
               : 'Suggestions come only from checked recipes, never repeated within 30 days.'}</p>
             <input placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote} onChange={(e) => setPnote(e.target.value)} />
             <div className="pickcontrols">
