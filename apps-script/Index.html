@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<base target="_top">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --accent:#c2410c; --bg:#fff7ed; --card:#ffffff; --line:#e7e5e4; }
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin:0; background:var(--bg); color:#1c1917; }
+  header { padding:14px 16px 6px; }
+  h1 { font-size:20px; margin:0; }
+  .sub { font-size:12px; color:#78716c; margin-top:2px; }
+  nav { display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px; position:sticky; top:0; background:var(--bg); }
+  nav button { border:1px solid var(--line); background:var(--card); border-radius:16px; padding:6px 12px; font-size:13px; }
+  nav button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .filters { display:flex; flex-wrap:wrap; gap:6px; padding:0 16px 8px; }
+  .filters select, .filters input { font-size:13px; padding:6px; border:1px solid var(--line); border-radius:8px; }
+  #list { padding:0 16px 80px; }
+  .row { display:flex; gap:10px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:8px; margin-bottom:8px; }
+  .row img { width:96px; height:54px; object-fit:cover; border-radius:6px; flex:none; }
+  .row .t { font-size:13px; flex:1; }
+  .row .m { font-size:11px; color:#78716c; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:12px; }
+  .card h3 { margin:0 0 4px; font-size:15px; }
+  .meta { font-size:12px; color:#78716c; margin-bottom:6px; }
+  .sec { font-size:13px; margin:8px 0 2px; font-weight:600; }
+  .card p, .card li { font-size:13px; line-height:1.45; }
+  .acts { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .acts button { font-size:12px; border:1px solid var(--accent); color:var(--accent); background:#fff; border-radius:14px; padding:5px 10px; }
+  .note { font-size:12px; color:#78716c; padding:0 16px 10px; }
+  .badge { font-size:10px; border:1px solid var(--line); border-radius:8px; padding:1px 5px; color:#78716c; }
+  #pickbar { padding:0 16px 10px; display:none; }
+  #pickbar input { width:100%; font-size:13px; padding:8px; border:1px solid var(--line); border-radius:8px; margin-bottom:6px; }
+  #pickbar button { background:var(--accent); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-size:14px; }
+
+  @media (max-width:640px){
+    .row{flex-wrap:wrap;align-items:flex-start}
+    .row .t{flex:1 1 calc(100% - 116px);min-width:0;font-size:14px}
+    .row .m{font-size:12px}
+    .row .acts{flex:1 1 100%;margin-top:4px}
+    .row .acts button{font-size:13px;padding:6px 12px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Easy Recipe Library</h1>
+  <div class="sub" id="fresh"></div>
+</header>
+<nav id="tabs">
+  <button data-t="pick">Pick for me</button>
+  <button data-t="recipes">Recipes</button>
+  <button data-t="snack">Snacks</button>
+  <button data-t="breakfast">Breakfast</button>
+  <button data-t="lunch/dinner">Sunday meals</button>
+  <button data-t="sweets">Sweets</button>
+  <button data-t="all">All videos</button>
+  <button data-t="history">History</button>
+</nav>
+<div class="filters" id="filters" style="display:none">
+  <select id="fch"><option value="">All channels</option></select>
+  <select id="fdiet"><option value="">Veg + Non-veg</option><option value="veg">Veg</option><option value="non-veg">Non-veg</option></select>
+  <input id="fq" placeholder="Search dish..." oninput="renderIndex()">
+</div>
+<div id="pickbar">
+  <input id="picknote" placeholder="Anything specific? (e.g. no onion, quick, for kids)">
+  <div class="acts" style="margin:0 0 8px">
+    <select id="pdiet"><option value="">Veg + Non-veg</option><option value="Veg">Veg</option><option value="Non-veg">Non-veg</option></select>
+    <select id="pmeal"><option value="">Any meal</option><option value="snack">Snack</option><option value="breakfast">Breakfast</option><option value="lunch">Lunch/dinner</option></select>
+  </div>
+  <button onclick="doPick()">Give me 5 ideas</button>
+  <div class="note" style="padding:6px 0 0">Suggestions come only from checked recipes, never repeated within 30 days.</div>
+</div>
+<div id="list"></div>
+
+<script>
+var TAB='pick', VIDEOS=[], RECIPES=[], HISTORY=[];
+function el(h){ var d=document.createElement('div'); d.innerHTML=h; return d.firstChild; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+function show(t){
+  TAB=t;
+  document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on', b.dataset.t===t));
+  document.getElementById('filters').style.display = ['snack','breakfast','lunch/dinner','sweets','all'].includes(t)?'flex':'none';
+  document.getElementById('pickbar').style.display = t==='pick'?'block':'none';
+  if (t==='pick') return renderPicksIntro();
+  if (t==='recipes') return renderRecipes();
+  if (t==='history') return renderHistory();
+  renderIndex();
+}
+document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>show(b.dataset.t));
+
+function acts(id,title){
+  return '<div class="acts">' +
+    '<button onclick="mark(this,\''+id+'\',\''+esc(title).replace(/'/g,"\\'")+'\',\'saved-for-later\')">Save for later</button>' +
+    '<button onclick="mark(this,\''+id+'\',\''+esc(title).replace(/'/g,"\\'")+'\',\'chosen\')">Choose this</button>' +
+    '<button onclick="mark(this,\''+id+'\',\''+esc(title).replace(/'/g,"\\'")+'\',\'cooked\')">Cooked</button></div>';
+}
+function mark(btn,id,title,state){
+  btn.disabled=true;
+  google.script.run.withSuccessHandler(()=>{ btn.textContent='Saved'; loadHistory(); })
+    .withFailureHandler(()=>{ btn.disabled=false; btn.textContent='Try again'; })
+    .saveHistory(id,title,state);
+}
+
+function renderIndex(){
+  var cat = TAB==='all' ? '' : TAB;
+  var f = { q: document.getElementById('fq').value,
+            channel: document.getElementById('fch').value,
+            diet: document.getElementById('fdiet').value };
+  if (cat) f.category = cat;
+  document.getElementById('list').innerHTML='<p class="note">Loading...</p>';
+  google.script.run.withSuccessHandler(rows=>{
+    var L=document.getElementById('list'); L.innerHTML='';
+    if(!rows.length){ L.innerHTML='<p class="note">No videos match. Clear search or filters.</p>'; return; }
+    rows.forEach(r=>{
+      var h='<div class="row"><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><img src="'+esc(r.thumb)+'" loading="lazy" alt=""></a>'+
+        '<div class="t"><a href="'+esc(r.url)+'" target="_blank" rel="noopener" style="color:inherit">'+esc(r.title)+'</a>'+
+        '<div class="m">'+esc(r.channel)+' · '+(r.published?esc(r.published)+' · ':'')+esc(r.category)+
+        ' <span class="badge">'+esc(r.diet||'')+'</span> '+
+        (r.status==='raw-extracted'?'<span class="badge">details captured</span>':'')+'</div></div></div>';
+      var row=el(h); row.appendChild(el(acts(r.id,r.title)));
+      L.appendChild(row);
+    });
+  }).getVideos(f);
+}
+
+function renderRecipes(){
+  var L=document.getElementById('list'); L.innerHTML='';
+  if(!RECIPES.length){ L.innerHTML='<p class="note">No checked recipes yet.</p>'; return; }
+  RECIPES.forEach(c=>{
+    var vid=(String(c.url).match(/v=([\w-]{11})/)||[])[1]||'';
+    var h='<div class="card"><h3>'+esc(c.name)+'</h3>'+
+      '<div class="meta">'+esc(c.channel)+' · '+esc(c.diet)+' · '+esc(c.meal)+'</div>'+
+      (c.partial?'<div class="meta"><span class="badge" style="border-color:var(--accent);color:var(--accent)">quantities partly approximate - see note</span></div>':'')+
+      '<div class="sec">Time</div><p>'+esc(c.time)+'</p>'+
+      '<div class="sec">Ingredients</div><p>'+esc(c.ingredients)+'</p>'+
+      '<div class="sec">Steps</div><ol>'+c.steps.map(s=>'<li>'+esc(s)+'</li>').join('')+'</ol>'+
+      '<p class="note">'+esc(c.source)+'</p>'+
+      '<div class="acts"><a href="'+esc(c.url)+'" target="_blank" rel="noopener"><button>Watch video</button></a></div></div>';
+    var card=el(h); card.appendChild(el(acts(vid,c.name)));
+    L.appendChild(card);
+  });
+}
+
+function renderHistory(){
+  var L=document.getElementById('list'); L.innerHTML='';
+  if(!HISTORY.length){ L.innerHTML='<p class="note">Nothing saved, suggested or cooked yet.</p>'; return; }
+  var byState={};
+  HISTORY.forEach(h=>{ (byState[h.state]=byState[h.state]||[]).push(h); });
+  ['saved-for-later','chosen','cooked','suggested'].forEach(st=>{
+    if(!byState[st]) return;
+    L.appendChild(el('<div class="sec" style="padding:0 2px">'+st.replace(/-/g,' ')+'</div>'));
+    byState[st].slice().reverse().forEach(h=>{
+      L.appendChild(el('<div class="row"><div class="t">'+esc(h.title)+'<div class="m">'+esc(h.date)+'</div></div></div>'));
+    });
+  });
+}
+
+function renderPicksIntro(){
+  document.getElementById('list').innerHTML='';
+}
+function doPick(){
+  var f={ diet:document.getElementById('pdiet').value, meal:document.getElementById('pmeal').value };
+  var note=document.getElementById('picknote').value;
+  var L=document.getElementById('list'); L.innerHTML='<p class="note">Picking...</p>';
+  google.script.run.withSuccessHandler(res=>{
+    L.innerHTML='';
+    if(res.note) L.appendChild(el('<p class="note">'+esc(res.note)+'</p>'));
+    if(res.noteInfo) L.appendChild(el('<p class="note">'+esc(res.noteInfo)+'</p>'));
+    if(!res.usedAI) L.appendChild(el('<p class="note">AI ranking is off until you choose a provider; these are unranked matches. Ask in chat for a reasoned pick.</p>'));
+    res.picks.forEach(p=>{
+      var vid=(String(p.url).match(/v=([\w-]{11})/)||[])[1]||'';
+      var h='<div class="card"><h3>'+esc(p.name)+'</h3>'+
+        '<div class="meta">'+esc(p.diet)+' · '+esc(p.meal)+'</div>'+
+        (p.reason?'<p>'+esc(p.reason)+'</p>':'')+
+        '<div class="sec">Time</div><p>'+esc(p.time)+'</p>'+
+        '<div class="acts"><a href="'+esc(p.url)+'" target="_blank" rel="noopener"><button>Watch video</button></a></div></div>';
+      var card=el(h); card.appendChild(el(acts(vid,p.name)));
+      L.appendChild(card);
+    });
+    loadHistory();
+  }).withFailureHandler(e=>{
+    L.innerHTML='<p class="note">Pick failed: '+esc(e && e.message || e)+'</p>';
+  }).pickForMe(f, note);
+}
+
+function loadHistory(){ google.script.run.withSuccessHandler(h=>{HISTORY=h;}).getHistory(); }
+google.script.run.withSuccessHandler(cs=>{
+  var s=document.getElementById('fch');
+  cs.forEach(c=>s.appendChild(el('<option>'+esc(c)+'</option>')));
+}).getChannels();
+google.script.run.withSuccessHandler(r=>{RECIPES=r; if(TAB==='recipes')renderRecipes();}).getRecipes();
+loadHistory();
+document.getElementById('fresh').textContent='Data: Google Sheet, updated as recipes are checked.';
+show('pick');
+</script>
+</body>
+</html>
