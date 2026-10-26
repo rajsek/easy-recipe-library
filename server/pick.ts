@@ -381,12 +381,15 @@ export async function pickForMe(
   excluded: Record<string, true>,
   rankFn?: RankFn,
   classifyFn?: ClassifyFn,
-  slimFn?: ((candidates: RecipeRow[]) => Promise<RecipeRow[] | null>) | null
+  slimFn?: ((candidates: RecipeRow[]) => Promise<RecipeRow[] | null>) | null,
+  seenIds?: Record<string, true>
 ): Promise<PickResult> {
   let blockedByHistory = 0;
+  let blockedBySeen = 0;
   let candidates = filterCandidateRecipes(recipes, filter).filter((r) => {
     const id = videoIdOf(r.video_url);
     if (excluded[id]) { blockedByHistory++; return false; }
+    if (seenIds && seenIds[id]) { blockedBySeen++; return false; }
     return true;
   });
   // One idea per video.
@@ -504,6 +507,11 @@ export async function pickForMe(
   // When the no-repeat rule is what emptied the pool, say so plainly - a
   // bare "0 qualify" would read like the library has nothing at all.
   let finalNote = chosen.length < 5 && !noteZeroMatch ? `Only ${chosen.length} verified recipes qualify right now - no filler added.` : '';
+  if (blockedBySeen > 0) {
+    noteInfo = (noteInfo ? noteInfo + ' ' : '') +
+      blockedBySeen + ' checked ' + (blockedBySeen === 1 ? 'recipe was' : 'recipes were') +
+      ' skipped because you already saw ' + (blockedBySeen === 1 ? 'it' : 'them') + ' in this list.';
+  }
   if (chosen.length === 0 && !noteZeroMatch && blockedByHistory > 0) {
     finalNote = 'Every verified recipe under these filters was already suggested in the last 30 days - those ideas come back after that. Try a different filter, or ask for more recipes to be added.';
     noteInfo = noteInfo.replace(/, so the note was ranked by meaning/, ' directly, but nothing new was left to rank');
