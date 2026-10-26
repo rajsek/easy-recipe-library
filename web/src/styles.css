@@ -124,3 +124,7 @@ a.rowtitle:hover { color:var(--leaf); }
 @media (prefers-reduced-motion: reduce) {
   * { animation:none !important; transition:none !important; scroll-behavior:auto !important; }
 }
+
+.tachips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.tachip { padding: 6px 12px; border-radius: 16px; border: 1px solid var(--line, #ccc); background: #fff; font-size: 14px; cursor: pointer; min-height: 32px; }
+.tachip.active, .tachip:hover { background: #eef4ff; border-color: #7aa2f7; }
