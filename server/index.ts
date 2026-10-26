@@ -18,7 +18,7 @@ import {
   addQueueRequest, getQueueRequest
 } from './data.js';
 import { pickForMe, excludedIds } from './pick.js';
-import { buildRankFn, buildClassifyFn } from './ai.js';
+import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -93,6 +93,7 @@ app.post('/api/history', async (req, res) => {
 // AI ranking - only when the owner opted in via env (see README privacy note).
 const { rankFn, provider: aiProvider } = buildRankFn();
 const classifyFn = buildClassifyFn();
+const askFn = buildAskFn();
 
 app.post('/api/pick', async (req, res) => {
   const diet = String(req.body?.diet || '');
@@ -127,6 +128,26 @@ app.post('/api/ask', async (req, res) => {
     res.status(500).json({ error: e.message || 'could not queue the request' });
   }
 });
+// Instant AI answer ("free AI in app" mode). Advisory-only: constrained to
+// verified recipes, refuses medical/nutrition/allergy advice and off-topic
+// questions (prompt-enforced). Honest 503 when no provider is configured.
+app.post('/api/ask-ai', async (req, res) => {
+  if (!askFn) return res.status(503).json({ error: 'AI answers are not set up on this deployment.' });
+  const question = String(req.body?.question || '').trim();
+  if (!question) return res.status(400).json({ error: 'no question given' });
+  if (question.length > 500) return res.status(400).json({ error: 'question too long (500 chars max)' });
+  const diet = String(req.body?.diet || '');
+  const meal = String(req.body?.meal || '');
+  if (diet && !['Veg', 'Non-veg', 'Egg', 'Contains egg'].includes(diet)) return res.status(400).json({ error: 'bad diet' });
+  try {
+    const recipes = await getRecipeRows();
+    const answer = await askFn(recipes as any, question, { diet, meal });
+    res.json({ answer });
+  } catch {
+    res.status(502).json({ error: 'The AI answer failed this time - please try again.' });
+  }
+});
+
 app.get('/api/ask/:id', async (req, res) => {
   if (mode === 'demo') return res.status(503).json({ error: 'Ask-in-app needs the Sheet connection, which demo mode does not have.' });
   const r = await getQueueRequest(String(req.params.id || ''));
