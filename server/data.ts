@@ -142,7 +142,7 @@ export async function getHistory() {
 export async function getHistoryRows(): Promise<Row[]> { return readTab('History'); }
 export async function getPickRows(): Promise<Row[]> { return readTab('Picks'); }
 
-const ALLOWED_STATES = new Set(['saved-for-later', 'chosen', 'cooked']);
+const ALLOWED_STATES = new Set(['saved-for-later', 'chosen', 'cooked', 'favourite']);
 
 export async function saveHistory(videoId: string, title: string, state: string) {
   if (!ALLOWED_STATES.has(state)) throw new Error('bad state');
@@ -152,9 +152,16 @@ export async function saveHistory(videoId: string, title: string, state: string)
   return { ok: true, date };
 }
 
+/** In-memory picks in demo mode, so the 30-day no-repeat works there too
+ *  (resets on server restart, like demo history). */
+export const demoPicks: Row[] = [];
+
 export async function recordPick(filter: any, note: string, ids: string[], names: string[]) {
   const date = new Date().toISOString().slice(0, 10);
-  if (MODE === 'demo') return;
+  if (MODE === 'demo') {
+    demoPicks.push({ date, suggested_video_ids: ids.join(',') });
+    return;
+  }
   await appendRow('Picks', [date, JSON.stringify(filter || {}), note || '', ids.join(','), '', names.join(' | ')]);
 }
 
