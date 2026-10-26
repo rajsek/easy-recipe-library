@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { taFilter, taNav, toggleSel } from './ta';
 
 interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; diet: string; published: string; status: string; }
 interface Recipe { name: string; url: string; channel: string; diet: string; meal: string; time: string; ingredients: string; steps: string[]; source: string; partial: boolean; }
@@ -238,6 +239,13 @@ export default function App() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [ingVocab, setIngVocab] = useState<string[]>([]);
   const [selIngs, setSelIngs] = useState<string[]>([]);
+  const [dishVocab, setDishVocab] = useState<string[]>([]);
+  const [selDishes, setSelDishes] = useState<string[]>([]);
+  const [dishInput, setDishInput] = useState('');
+  const [dishOpen, setDishOpen] = useState(false);
+  const [showDishList, setShowDishList] = useState(false);
+  const [showIngList, setShowIngList] = useState(false);
+  const [dishIndex, setDishIndex] = useState(0);
   const [taOpen, setTaOpen] = useState(false);
   const [taIndex, setTaIndex] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -268,7 +276,7 @@ export default function App() {
     return id;
   });
   const [sessionInfo, setSessionInfo] = useState<{ continued: boolean; diet: string; meal: string } | null>(null);
-  const [pickForm, setPickForm] = useState<{ note: string; diet: string; meal: string } | null>(null);
+  const [pickForm, setPickForm] = useState<{ note: string; diet: string; meal: string; dishes: string[]; ings: string[] } | null>(null);
   interface TraceRow { request_id: string; ts: string; mode: string; request_text: string; outbound_payload: string; reply_text: string; handling: string; status: string; error?: string }
   const [traces, setTraces] = useState<TraceRow[]>([]);
   const [tracesNote, setTracesNote] = useState('');
@@ -278,6 +286,7 @@ export default function App() {
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
     apiFetch('/api/ingredients').then((r) => r.json()).then((j) => setIngVocab(j.ingredients || [])).catch(() => {});
+    apiFetch('/api/dishes').then((r) => r.json()).then((j) => setDishVocab(j.dishes || [])).catch(() => {});
   }, []);
 
   const loadTraces = useCallback(() => {
@@ -320,11 +329,7 @@ export default function App() {
   }
   function taMatches(): string[] {
     const { token } = taCurrentToken();
-    const t = token.trim().toLowerCase();
-    if (t.length < 2) return [];
-    const prefix = ingVocab.filter((v) => v.startsWith(t));
-    const inner = ingVocab.filter((v) => !v.startsWith(t) && v.indexOf(t) !== -1);
-    return [...prefix, ...inner].slice(0, 6);
+    return taFilter(ingVocab, token);
   }
   function taPick(choice: string) {
     const { start } = taCurrentToken();
@@ -341,13 +346,21 @@ export default function App() {
     return selIngs.join(', ') + (free ? ' - ' + free : '');
   }
   const taList = taOpen ? taMatches() : [];
+  // Dish filter: same typeahead semantics as ingredients (shared taFilter /
+  // taNav), but chips constrain the recipe NAME (dish identity), OR across
+  // selected dishes - enforced server-side, bound into the corpus fingerprint.
+  const dishList = dishOpen ? taFilter(dishVocab, dishInput) : [];
+  function dishPick(choice: string) {
+    if (!selDishes.includes(choice)) setSelDishes([...selDishes, choice]);
+    setDishInput(''); setDishOpen(false); setDishIndex(0);
+  }
   async function doAskAi() {
     setAskAiState('sending'); setAskAiError(''); setAskAiResult(null);
-    const q = composedNote(); const d = pdiet; const m = pmeal;
+    const q = composedNote() || (selDishes.length > 0 ? 'Dishes: ' + selDishes.join(', ') : ''); const d = pdiet; const m = pmeal;
     try {
       const r = await apiFetch('/api/ask-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q, diet: d, meal: m, session_id: sessionId })
+        body: JSON.stringify({ question: q, diet: d, meal: m, session_id: sessionId, dishes: selDishes })
       });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not get an answer'); }
       const j = await r.json();
@@ -376,11 +389,11 @@ export default function App() {
     try {
       const r = await apiFetch('/api/pick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ diet: pdiet, meal: pmeal, note: composedNote() })
+        body: JSON.stringify({ diet: pdiet, meal: pmeal, note: composedNote(), dishes: selDishes })
       });
       const j = await r.json();
       setPickResult(j);
-      setPickForm({ note: pnote, diet: pdiet, meal: pmeal });
+      setPickForm({ note: pnote, diet: pdiet, meal: pmeal, dishes: selDishes, ings: selIngs });
       // Load-more paging state: ids already on screen are sent back as `seen`
       // so the next batch is disjoint (per-instance memory is unreliable on
       // serverless; the client list is the source of truth for paging).
@@ -399,7 +412,7 @@ export default function App() {
     try {
       const r = await apiFetch('/api/pick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ diet: pickForm.diet, meal: pickForm.meal, note: pickForm.note, seen: seenIds })
+        body: JSON.stringify({ diet: pickForm.diet, meal: pickForm.meal, note: pickForm.note, dishes: pickForm.dishes, seen: seenIds })
       });
       const j = await r.json();
       const np = j.picks || [], nv = j.videos || [];
@@ -475,14 +488,17 @@ export default function App() {
                 ))}
               </div>
             )}
-            <input ref={noteInputRef} placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote}
+            <label className="muted small" htmlFor="notebox">Ingredients or note</label>
+            <input id="notebox" ref={noteInputRef} placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote}
               onChange={(e) => { setPnote(e.target.value); setTaOpen(true); setTaIndex(0); }}
               onKeyDown={(e) => {
+                if (e.key === 'Escape') { setTaOpen(false); return; }
                 if (!taOpen || taList.length === 0) return;
-                if (e.key === 'ArrowDown') { e.preventDefault(); setTaIndex((taIndex + 1) % taList.length); }
-                else if (e.key === 'ArrowUp') { e.preventDefault(); setTaIndex((taIndex - 1 + taList.length) % taList.length); }
-                else if ((e.key === 'Enter' || e.key === 'Tab') && taList[taIndex]) { e.preventDefault(); taPick(taList[taIndex]); }
-                else if (e.key === 'Escape') { setTaOpen(false); }
+                const nav = taNav(e.key, taIndex, taList.length);
+                if (!nav) return;
+                e.preventDefault();
+                if (nav.type === 'move') setTaIndex(nav.index);
+                else if (taList[nav.index]) taPick(taList[nav.index]);
               }}
               onBlur={() => setTimeout(() => setTaOpen(false), 150)} />
             {taList.length > 0 && (
@@ -494,6 +510,76 @@ export default function App() {
                 ))}
               </div>
             )}
+            {selDishes.length > 0 && (
+              <div className="tachips" aria-label="selected dishes">
+                {selDishes.map((v) => (
+                  <button key={v} type="button" className="tachip sel" title="remove"
+                    onClick={() => setSelDishes(selDishes.filter((x) => x !== v))}>{v}{' ×'}</button>
+                ))}
+              </div>
+            )}
+            <label className="muted small" htmlFor="dishbox">Dish</label>
+            <input id="dishbox" placeholder="Dish name (e.g. ven pongal)" value={dishInput} aria-label="dish filter"
+              onChange={(e) => { setDishInput(e.target.value); setDishOpen(true); setDishIndex(0); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') { setDishOpen(false); return; }
+                if (!dishOpen || dishList.length === 0) return;
+                const nav = taNav(e.key, dishIndex, dishList.length);
+                if (!nav) return;
+                e.preventDefault();
+                if (nav.type === 'move') setDishIndex(nav.index);
+                else if (dishList[nav.index]) dishPick(dishList[nav.index]);
+              }}
+              onBlur={() => setTimeout(() => setDishOpen(false), 150)} />
+            {dishList.length > 0 && (
+              <div className="tachips" role="listbox" aria-label="dish suggestions from your library">
+                {dishList.map((v, i) => (
+                  <button key={v} type="button" role="option" aria-selected={i === dishIndex}
+                    className={'tachip' + (i === dishIndex ? ' active' : '')}
+                    onMouseDown={(e) => { e.preventDefault(); dishPick(v); }}>{v}</button>
+                ))}
+              </div>
+            )}
+            {dishOpen && dishInput.trim().length >= 2 && dishList.length === 0 && (
+              <p className="muted small">No dish in your checked library matches "{dishInput.trim()}".</p>
+            )}
+            <p className="muted small">Pick one or more dishes - results match any selected dish.</p>
+            <div className="cblistwrap">
+              <div className="cblisthead">
+                <button type="button" className="btn ghost" aria-expanded={showDishList} onClick={() => setShowDishList(!showDishList)}>
+                  {showDishList ? 'Hide dish list' : 'Browse dishes'} ({selDishes.length} selected)
+                </button>
+                {selDishes.length > 0 && <button type="button" className="btn ghost" onClick={() => setSelDishes([])}>Clear all dishes</button>}
+              </div>
+              {showDishList && (
+                <div className="cblist" role="group" aria-label="all dishes in your checked library">
+                  {dishVocab.map((v) => (
+                    <label key={v} className="cbitem">
+                      <input type="checkbox" checked={selDishes.includes(v)} onChange={() => setSelDishes(toggleSel(selDishes, v))} />
+                      {v}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="cblistwrap">
+              <div className="cblisthead">
+                <button type="button" className="btn ghost" aria-expanded={showIngList} onClick={() => setShowIngList(!showIngList)}>
+                  {showIngList ? 'Hide ingredient list' : 'Browse ingredients'} ({selIngs.length} selected)
+                </button>
+                {selIngs.length > 0 && <button type="button" className="btn ghost" onClick={() => setSelIngs([])}>Clear all ingredients</button>}
+              </div>
+              {showIngList && (
+                <div className="cblist" role="group" aria-label="all ingredients in your checked library">
+                  {ingVocab.map((v) => (
+                    <label key={v} className="cbitem">
+                      <input type="checkbox" checked={selIngs.includes(v)} onChange={() => setSelIngs(toggleSel(selIngs, v))} />
+                      {v}
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="pickcontrols">
               <select value={pdiet} onChange={(e) => setPdiet(e.target.value)}>
                 <option value="">Veg + Non-veg</option><option value="Veg">Veg</option><option value="Non-veg">Non-veg</option>
@@ -514,7 +600,7 @@ export default function App() {
 
         {tab === 'pick' && pickResult && (
           <div className="grid">
-            {pickForm && (pickForm.note !== pnote || pickForm.diet !== pdiet || pickForm.meal !== pmeal) && (
+            {pickForm && (pickForm.note !== pnote || pickForm.diet !== pdiet || pickForm.meal !== pmeal || pickForm.dishes.join(' ') !== selDishes.join(' ') || pickForm.ings.join(' ') !== selIngs.join(' ')) && (
               <p className="muted span-all">Note or filters changed since these picks - press "Give me 5 ideas" to refresh.</p>
             )}
             {pickResult.note && <p className="muted span-all">{pickResult.note}</p>}
@@ -542,10 +628,10 @@ export default function App() {
               </div>
               {askMode === 'ai' && aiOn && (
                 <>
-                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || (!pnote.trim() && selIngs.length === 0)}>
+                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || (!pnote.trim() && selIngs.length === 0 && selDishes.length === 0)}>
                     {askAiState === 'sending' ? 'Asking...' : 'Ask about the note above'}
                   </button>
-                  {!pnote.trim() && selIngs.length === 0 && <p className="muted">Type a note or pick ingredients above first.</p>}
+                  {!pnote.trim() && selIngs.length === 0 && selDishes.length === 0 && <p className="muted">Type a note, or pick ingredients or dishes above first.</p>}
                 </>
               )}
               {askMode === 'whatsapp' && (
@@ -556,6 +642,7 @@ export default function App() {
                     'Diet: ' + (pdiet || 'Veg + Non-veg') + '\n' +
                     'Meal: ' + (pmeal || 'any') +
                     (composedNote() ? '\nNote: ' + composedNote() : '') +
+                    (selDishes.length > 0 ? '\nDishes: ' + selDishes.join(', ') : '') +
                     '\nPlease pick from my recipe library.'
                   )}
                   target="_blank" rel="noopener"
