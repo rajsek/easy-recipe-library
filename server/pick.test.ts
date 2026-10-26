@@ -161,3 +161,18 @@ test('note keyword nothing matches: honest zero, no filler', async () => {
   assert.equal(r.count, 0);
   assert.match(r.noteInfo, /no verified recipe matches "pasta"/);
 });
+
+test('word boundaries: "breadless" title does not satisfy "bread"; exclusion "no corn" spares "popcorn"', async () => {
+  const rows = [
+    { recipe_name: 'Breadless Besan Toast', video_url: 'https://www.youtube.com/watch?v=GGGGGGGGGG1', diet: 'Veg', meal_type: 'snack', ingredients: 'besan, onion, tomato', verified: 'yes' },
+    { recipe_name: 'Real Bread Toast', video_url: 'https://www.youtube.com/watch?v=GGGGGGGGGG2', diet: 'Veg', meal_type: 'snack', ingredients: 'bread slices, besan', verified: 'yes' },
+    { recipe_name: 'Popcorn Bowl', video_url: 'https://www.youtube.com/watch?v=GGGGGGGGGG3', diet: 'Veg', meal_type: 'snack', ingredients: 'popcorn, salt', verified: 'yes' },
+    { recipe_name: 'Corn Cutlet', video_url: 'https://www.youtube.com/watch?v=GGGGGGGGGG4', diet: 'Veg', meal_type: 'snack', ingredients: 'sweet corn, potato', verified: 'yes' },
+  ];
+  const r = await pickForMe({}, 'bread', rows as any, {});
+  assert.deepEqual(r.picks.map((p) => p.name), ['Real Bread Toast'], 'breadless does not count as bread');
+  const r2 = await pickForMe({}, 'no corn', rows as any, {});
+  const names2 = r2.picks.map((p) => p.name);
+  assert.ok(!names2.includes('Corn Cutlet'), 'corn excluded');
+  assert.ok(names2.includes('Popcorn Bowl'), 'popcorn not caught by no corn');
+});
