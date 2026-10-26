@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { pickForMe, excludedIds, videoIdOf, constrainAskCandidates } from './pick.js';
+import { pickForMe, excludedIds, videoIdOf, constrainAskCandidates, typeaheadVocab } from './pick.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const demo = JSON.parse(readFileSync(path.join(__dirname, 'test-fixtures.json'), 'utf8'));
@@ -378,4 +378,19 @@ test('ask constraints: library-wide absence stays an honest gap, never a recipe 
   ] as any;
   const { zeroReason } = constrainAskCandidates(pool, 'quinoa salad?', { titles: {}, videoOnly: {} }, { quinoa: 'food' }, undefined, pool); // classifier identifies the unknown word as food; library lists none
   assert.match(String(zeroReason), /not proof the dish does not exist/);
+});
+
+test('typeaheadVocab: phrases detected, singles kept, phrase-only parts dropped, unverified excluded', () => {
+  const rows = [
+    { recipe_name: 'A', video_url: 'u1', diet: 'Veg', meal_type: 'snack', ingredients: '200g paneer, 1 tsp garam masala, salt, coriander leaves', verified: 'yes' },
+    { recipe_name: 'B', video_url: 'u2', diet: 'Veg', meal_type: 'snack', ingredients: '100g tofu, 1 tsp garam masala, 2 green chillies, onion', verified: 'yes' },
+    { recipe_name: 'C', video_url: 'u3', diet: 'Veg', meal_type: 'snack', ingredients: 'secret spice', verified: 'no' },
+  ] as any;
+  const v = typeaheadVocab(rows);
+  assert.ok(v.includes('garam masala'), 'phrase detected');
+  assert.ok(v.includes('green chillies'), 'plural phrase detected');
+  assert.ok(v.includes('paneer') && v.includes('tofu') && v.includes('onion'), 'singles kept');
+  assert.ok(!v.includes('garam') && !v.includes('masala'), 'phrase-only parts dropped');
+  assert.ok(!v.includes('secret'), 'unverified row excluded');
+  assert.deepEqual([...v].sort(), v, 'sorted');
 });
