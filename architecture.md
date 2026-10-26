@@ -45,7 +45,7 @@ flowchart LR
 
 | ID | Component | Role | State |
 | --- | --- | --- | --- |
-| web-ui | React app (Vite build) | Filters, picks, ask, history, comms | Live |
+| web-ui | React app (Vite build) | Filters, picks, ask, history, comms. Committed, awaiting build: pick results page via a Load more button - batches append, no duplicates, filters of the original search preserved, honest exhaustion message | Live (paging committed, awaiting build) |
 | guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool. Post-output validation: an AI reason that denies a hard note word (e.g. "does not contain corn" on a corn-matched card) is hidden and disclosed in noteInfo - the deterministic match stands, false prose never renders | Live in production (365bf8b): AND semantics, question-word guard, staged zero-reasons. Committed, awaiting build: post-output reason validation |
 | session-store | In-memory ask sessions (server/session.ts) | 30-min TTL; follow-ups like "another option" reuse stored diet/meal and hide what was just shown; reset via "New conversation" | Live (resets on restart) |
 | semantic-cache | Answer reuse (server/semantic.ts) | A repeat question with the SAME constraints + library + intent is answered with 0 AI calls; "another option" and any constraint change bypass it | Live |
@@ -110,7 +110,7 @@ Newest first. SHAs are real commits on main.
 | Date (IST) | Commit(s) | What changed |
 | --- | --- | --- |
 | 2026-10-26 20:35 | 365bf8b, 837bc57, 6cbfece | web-ui + api: pick fills a thin checked pool (<5) with labelled full-corpus video alternatives (not counted, not recorded, diet-hint filtered, unique ids); WhatsApp ask route includes selected chips; regression test 89 |
-| 2026-10-26 21:00 | branch fix/pick-honesty (squash-merged; merge SHA in git log) | api: zero checked picks still get labelled video alternatives (the thin-pool fill no longer requires picks > 0); post-output validation hides AI reasons that deny a hard note word and discloses the hiding; regression tests 90-92 |
+| 2026-10-26 21:05 | branch rajsek-patch-1 (squash-merged; merge SHA in git log) | api + web-ui: (1) zero checked picks still get labelled video alternatives (thin-pool fill no longer requires picks > 0); (2) post-output validation hides AI reasons that deny a hard note word and discloses the hiding; (3) Load more paging: client sends the ids on screen as `seen`, server returns a disjoint next batch (browsing exclusion only - never touches 30-day history), honest "no more" at exhaustion; repeat-request sameness root-caused to per-instance serverless memory losing exclusions, fixed statelessly; regression tests 90-95 |
 | 2026-10-26 20:23 | 3208a7f | web-ui: selected ingredient chips alone enable the Ask button (chips-only ask); committed, awaiting deploy |
 | 2026-10-26 20:19 | e06f312 | build: npm run build runs tsc --noEmit -p web before vite so a missing import fails the build instead of shipping a blank page; committed, awaiting deploy |
 | 2026-10-26 20:19 | 64088bb | web-ui hotfix: import useRef (blank-screen ReferenceError); deployed and live-verified (renders, 62 cards, AND pick, zero-reason, console clean, mobile) |
