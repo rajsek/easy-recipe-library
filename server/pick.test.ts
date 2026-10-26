@@ -408,3 +408,28 @@ test('typeaheadVocab: phrases detected, singles kept, phrase-only parts dropped,
   assert.ok(!v.includes('secret'), 'unverified row excluded');
   assert.deepEqual([...v].sort(), v, 'sorted');
 });
+
+test('post-output validation: an AI reason that denies a hard note word is hidden', async () => {
+  const rows = [
+    { recipe_name: 'Crispy Chips', video_url: 'https://www.youtube.com/watch?v=vkREli-0Z9Y',
+      channel: 'X', diet: 'Veg', meal_type: 'Evening snack', time_notes: '',
+      ingredients: 'potatoes, salt, vinegar, corn starch, olive oil', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+  ];
+  const rankFn = async () => ({ order: [0], reasons: ['Only available recipe, but does not contain corn'] });
+  const r = await pickForMe({}, 'corn', rows as any, {}, rankFn as any);
+  assert.equal(r.picks.length, 1, 'deterministic corn match stands (corn starch is corn)');
+  assert.equal(r.picks[0].reason, '', 'false denial reason hidden');
+  assert.ok(/hidden because it contradicted/i.test(r.noteInfo), 'noteInfo discloses the hidden reason');
+});
+
+test('post-output validation: a truthful reason survives', async () => {
+  const rows = [
+    { recipe_name: 'Crispy Chips', video_url: 'https://www.youtube.com/watch?v=vkREli-0Z9Y',
+      channel: 'X', diet: 'Veg', meal_type: 'Evening snack', time_notes: '',
+      ingredients: 'potatoes, salt, vinegar, corn starch, olive oil', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+  ];
+  const rankFn = async () => ({ order: [0], reasons: ['Crispy snack, corn starch gives the crunch'] });
+  const r = await pickForMe({}, 'corn', rows as any, {}, rankFn as any);
+  assert.equal(r.picks[0].reason, 'Crispy snack, corn starch gives the crunch');
+  assert.ok(!/hidden/i.test(r.noteInfo));
+});
