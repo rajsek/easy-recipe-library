@@ -22,7 +22,7 @@ test('filterCandidateRecipes: verified-only, Veg strict, Non-veg explicit, unkno
 });
 
 test('structured answer: valid ids return text + canonical recipe cards', async () => {
-  const chat = async () => '{"text":"Try **Besan Bread Toast** - quick and veg.","ids":[1]}';
+  const chat = async () => ({ text: '{"text":"Try **Besan Bread Toast** - quick and veg.","ids":[1]}', meta: { provider: 'mock', model: 'mock', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
   const out = await askWithValidation(chat, rows.slice(0, 1), 'quick snack?', {});
   assert.equal(out.text, 'Try Besan Bread Toast - quick and veg.', 'markdown wrappers stripped from prose');
   assert.deepEqual(out.recipes.map((r) => r.recipe_name), ['Besan Bread Toast'], 'canonical row resolved from the cited id');
@@ -30,7 +30,7 @@ test('structured answer: valid ids return text + canonical recipe cards', async 
 
 test('structured answer: ids outside the candidate list are retried once, then rejected', async () => {
   let calls = 0;
-  const chat = async () => { calls++; return '{"text":"How about Chicken Tikka?","ids":[9]}'; };
+  const chat = async () => { calls++; return { text: '{"text":"How about Chicken Tikka?","ids":[9]}', meta: { provider: 'mock', model: 'mock', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }; };
   await assert.rejects(
     askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {}),
     /reference validation/,
@@ -41,14 +41,14 @@ test('structured answer: ids outside the candidate list are retried once, then r
 
 test('structured answer: non-JSON replies are retried once, then rejected', async () => {
   let calls = 0;
-  const chat = async () => { calls++; return 'Just make pasta!'; };
+  const chat = async () => { calls++; return { text: 'Just make pasta!', meta: { provider: 'mock', model: 'mock', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }; };
   await assert.rejects(askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {}), /reference validation/);
   assert.equal(calls, 2);
 });
 
 test('corrective retry succeeds when the model fixes its ids', async () => {
   let calls = 0;
-  const chat = async () => (++calls === 1 ? '{"text":"Maybe pasta?","ids":[7]}' : '{"text":"Better: Besan Bread Toast.","ids":[1]}');
+  const chat = async () => { ++calls; return { text: calls === 1 ? '{"text":"Maybe pasta?","ids":[7]}' : '{"text":"Better: Besan Bread Toast.","ids":[1]}', meta: { provider: 'mock', model: 'mock', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }; };
   const out = await askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {});
   assert.equal(out.text, 'Better: Besan Bread Toast.');
   assert.equal(out.recipes.length, 1);
@@ -56,14 +56,14 @@ test('corrective retry succeeds when the model fixes its ids', async () => {
 });
 
 test('structured answer: prose naming an uncited recipe carries no card', async () => {
-  const chat = async () => '{"text":"You could improvise a pizza, but from your library: Besan Bread Toast.","ids":[1]}';
+  const chat = async () => ({ text: '{"text":"You could improvise a pizza, but from your library: Besan Bread Toast.","ids":[1]}', meta: { provider: 'mock', model: 'mock', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } });
   const out = await askWithValidation(chat, rows.slice(0, 1), 'dinner idea?', {});
   assert.deepEqual(out.recipes.map((r) => r.recipe_name), ['Besan Bread Toast'], 'only cited ids render as library cards');
 });
 
 test('ask under Veg filter: the model only ever receives veg candidates', async () => {
   let sawEgg = false;
-  const chat = async (prompt: string) => { sawEgg = /Spicy Egg Omelette/.test(prompt); return '{"text":"ok","ids":[]}'; };
+  const chat = async (prompt: string) => { sawEgg = /Spicy Egg Omelette/.test(prompt); return { text: '{"text":"ok","ids":[]}', meta: { provider: 'mock', model: 'mock', prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 } }; };
   const candidates = filterCandidateRecipes(rows, { diet: 'Veg' });
   await askWithValidation(chat, candidates, 'any snack?', { diet: 'Veg' });
   assert.equal(sawEgg, false, 'egg dish must not even reach the prompt under Veg');
