@@ -456,11 +456,11 @@ test('canonical ingredient identity: "corn starch" is not "corn" (Crispy Chips r
   assert.ok(!/hidden/i.test(r.noteInfo), 'no reason-hiding needed when the match itself is correct');
 });
 
-test('derived-form rule is symmetric: "rice flour" is not "rice"', async () => {
+test('derived-form rule is evidence-scoped, not global: "rice flour" still matches "rice" (no grounded confusion case)', async () => {
   const rows = [
     { recipe_name: 'Rice Flour Murukku', video_url: 'https://www.youtube.com/watch?v=ddddddddddd', channel: 'X', diet: 'Veg', meal_type: 'Snack', time_notes: '', ingredients: 'rice flour, butter, salt', steps: 's', source_note: '', verified: 'yes', date_checked: '' },
     { recipe_name: 'Tomato Rice', video_url: 'https://www.youtube.com/watch?v=eeeeeeeeeee', channel: 'X', diet: 'Veg', meal_type: 'Lunch', time_notes: '', ingredients: 'rice, tomato, spices', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
   ];
   const r = await pickForMe({}, 'rice', rows as any, {});
-  assert.deepEqual(r.picks.map((p) => p.name), ['Tomato Rice']);
+  assert.equal(r.picks.length, 2, 'no ingredient exclusion without a grounded case');
 });
