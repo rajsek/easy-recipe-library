@@ -248,6 +248,10 @@ export default function App() {
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const noteInputRef = useRef<HTMLInputElement>(null);
   const [pickResult, setPickResult] = useState<PickResult | null>(null);
+  const [extraPicks, setExtraPicks] = useState<PickResult['picks']>([]);
+  const [extraVideos, setExtraVideos] = useState<NonNullable<PickResult['videos']>>([]);
+  const [seenIds, setSeenIds] = useState<string[]>([]);
+  const [moreState, setMoreState] = useState<'idle' | 'loading' | 'exhausted'>('idle');
   const [picking, setPicking] = useState(false);
   const [askMode, setAskMode] = useState<'ai' | 'whatsapp'>('ai');
   const [askAiState, setAskAiState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
@@ -374,11 +378,38 @@ export default function App() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ diet: pdiet, meal: pmeal, note: composedNote() })
       });
-      setPickResult(await r.json());
+      const j = await r.json();
+      setPickResult(j);
       setPickForm({ note: pnote, diet: pdiet, meal: pmeal });
+      // Load-more paging state: ids already on screen are sent back as `seen`
+      // so the next batch is disjoint (per-instance memory is unreliable on
+      // serverless; the client list is the source of truth for paging).
+      setExtraPicks([]); setExtraVideos([]);
+      setSeenIds([...(j.picks || []).map((p: { url: string }) => videoId(p.url)), ...(j.videos || []).map((v: { video_id: string }) => v.video_id)]);
+      setMoreState('idle');
       loadHistory();
     } finally {
       setPicking(false);
+    }
+  }
+
+  async function doLoadMore() {
+    if (!pickForm) return;
+    setMoreState('loading');
+    try {
+      const r = await apiFetch('/api/pick', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diet: pickForm.diet, meal: pickForm.meal, note: pickForm.note, seen: seenIds })
+      });
+      const j = await r.json();
+      const np = j.picks || [], nv = j.videos || [];
+      if (np.length + nv.length === 0) { setMoreState('exhausted'); return; }
+      setExtraPicks([...extraPicks, ...np]);
+      setExtraVideos([...extraVideos, ...nv]);
+      setSeenIds([...seenIds, ...np.map((p: { url: string }) => videoId(p.url)), ...nv.map((v: { video_id: string }) => v.video_id)]);
+      setMoreState('idle');
+    } catch {
+      setMoreState('idle');
     }
   }
 
@@ -607,6 +638,42 @@ export default function App() {
                 </div>
               </article>
             ))}
+            {extraPicks.map((p) => (
+              <article className="card" key={p.name}>
+                <a className="thumb" href={p.url} target="_blank" rel="noopener">
+                  <img src={thumb(p.url)} loading="lazy" alt="" />
+                  <span className="play">▶</span>
+                </a>
+                <div className="cardbody">
+                  <h3>{p.name}</h3>
+                  <Chips diet={p.diet} meal={p.meal} time={p.time} />
+                  {p.reason && <p>{p.reason}</p>}
+                  <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
+                  <ActionButtons id={videoId(p.url)} title={p.name} onSaved={loadHistory} />
+                </div>
+              </article>
+            ))}
+            {extraVideos.map((v) => (
+              <article className="card" key={v.video_id}>
+                <a className="thumb" href={v.url} target="_blank" rel="noopener">
+                  <img src={thumb(v.url)} loading="lazy" alt="" />
+                  <span className="play">▶</span>
+                </a>
+                <div className="cardbody">
+                  <h3>{v.title}</h3>
+                  <p className="muted small">{v.channel}{v.diet ? ' · ' + v.diet : ''}</p>
+                  <p className="muted small">{v.status}</p>
+                  <a className="btn ghost" href={v.url} target="_blank" rel="noopener">Watch video</a>
+                </div>
+              </article>
+            ))}
+            {moreState === 'exhausted' ? (
+              <p className="muted span-all">No more matching recipes or videos for this search.</p>
+            ) : (pickResult.count > 0 || (pickResult.videos || []).length > 0 || extraPicks.length + extraVideos.length > 0) && (
+              <button className="btn ghost span-all" onClick={doLoadMore} disabled={moreState === 'loading'}>
+                {moreState === 'loading' ? 'Loading...' : 'Load more'}
+              </button>
+            )}
           </div>
         )}
 

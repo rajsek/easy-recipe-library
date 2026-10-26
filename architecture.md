@@ -4,15 +4,16 @@ This file describes how the app is put together. It is updated in the same
 commit as any architecture change, keeping section headings and diagram node
 IDs stable so `git diff` shows exactly what each change touched.
 
-## Current state (as of 2026-10-26 ~20:30 IST; production = deployment of 64088bb)
+## Current state (as of 2026-10-26 ~21:00 IST; production = deployment of 365bf8b)
 
 Live on Vercel (Hobby, free tier), demo-snapshot mode. PRODUCTION currently serves
-deployment of commit 64088bb: 62 cards (61 verified + 1 partial) + 4468-video index,
-AND note semantics, staged zero-reasons, and the multi-chip typeahead UI (64088bb is
-the useRef hotfix that restored the page after the blank-screen incident; the npm
-build now runs tsc --noEmit before vite). The repo main is newer (chips-only Ask
-button fix, pick-route video alternatives) and AWAITS its build; "State" below says Live only for what production
-actually serves. Saves/history are per-instance memory and reset on restart.
+deployment of commit 365bf8b (verified live 2026-10-26 20:46-20:56 IST): 62 cards
+(61 verified + 1 partial) + 4468-video index, AND note semantics, staged zero-reasons,
+multi-chip typeahead UI, chips-only Ask fix, and pick-route video alternatives.
+The repo main is newer (test 89, pick-videos UI 6cbfece, this doc refresh) and AWAITS
+its build; push-to-deploy automation has stalled twice (cause unknown). "State" below
+says Live only for what production actually serves. Saves/history are per-instance
+memory and reset on restart.
 
 ## Request flow (diagram)
 
@@ -44,8 +45,8 @@ flowchart LR
 
 | ID | Component | Role | State |
 | --- | --- | --- | --- |
-| web-ui | React app (Vite build) | Filters, picks, ask, history, comms | Live |
-| guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool | Live in production (64088bb): AND semantics, question-word guard, staged zero-reasons |
+| web-ui | React app (Vite build) | Filters, picks, ask, history, comms. Committed, awaiting build: pick results page via a Load more button - batches append, no duplicates, filters of the original search preserved, honest exhaustion message | Live (paging committed, awaiting build) |
+| guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool. Post-output validation: an AI reason that denies a hard note word (e.g. "does not contain corn" on a corn-matched card) is hidden and disclosed in noteInfo - the deterministic match stands, false prose never renders | Live in production (365bf8b): AND semantics, question-word guard, staged zero-reasons. Committed, awaiting build: post-output reason validation |
 | session-store | In-memory ask sessions (server/session.ts) | 30-min TTL; follow-ups like "another option" reuse stored diet/meal and hide what was just shown; reset via "New conversation" | Live (resets on restart) |
 | semantic-cache | Answer reuse (server/semantic.ts) | A repeat question with the SAME constraints + library + intent is answered with 0 AI calls; "another option" and any constraint change bypass it | Live |
 | rag-retrieval | Full-corpus retrieval (server/rag.ts) | Top video-index matches join the shortlist, labelled "video found - details not extracted yet"; details are never invented | Live (verified 2026-10-26 19:47 IST: production /api/state rag.ready=true with 4468 titles; a paneer ask returned 3 checked cards + 2 labelled video suggestions) |
@@ -109,6 +110,7 @@ Newest first. SHAs are real commits on main.
 | Date (IST) | Commit(s) | What changed |
 | --- | --- | --- |
 | 2026-10-26 20:35 | 365bf8b, 837bc57, 6cbfece | web-ui + api: pick fills a thin checked pool (<5) with labelled full-corpus video alternatives (not counted, not recorded, diet-hint filtered, unique ids); WhatsApp ask route includes selected chips; regression test 89 |
+| 2026-10-26 21:05 | branch rajsek-patch-1 (squash-merged; merge SHA in git log) | api + web-ui: (1) zero checked picks still get labelled video alternatives (thin-pool fill no longer requires picks > 0); (2) post-output validation hides AI reasons that deny a hard note word and discloses the hiding; (3) Load more paging: client sends the ids on screen as `seen`, server returns a disjoint next batch (browsing exclusion only - never touches 30-day history), honest "no more" at exhaustion; repeat-request sameness root-caused to per-instance serverless memory losing exclusions, fixed statelessly; regression tests 90-95 |
 | 2026-10-26 20:23 | 3208a7f | web-ui: selected ingredient chips alone enable the Ask button (chips-only ask); committed, awaiting deploy |
 | 2026-10-26 20:19 | e06f312 | build: npm run build runs tsc --noEmit -p web before vite so a missing import fails the build instead of shipping a blank page; committed, awaiting deploy |
 | 2026-10-26 20:19 | 64088bb | web-ui hotfix: import useRef (blank-screen ReferenceError); deployed and live-verified (renders, 62 cards, AND pick, zero-reason, console clean, mobile) |

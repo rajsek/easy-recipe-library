@@ -381,12 +381,15 @@ export async function pickForMe(
   excluded: Record<string, true>,
   rankFn?: RankFn,
   classifyFn?: ClassifyFn,
-  slimFn?: ((candidates: RecipeRow[]) => Promise<RecipeRow[] | null>) | null
+  slimFn?: ((candidates: RecipeRow[]) => Promise<RecipeRow[] | null>) | null,
+  seenIds?: Record<string, true>
 ): Promise<PickResult> {
   let blockedByHistory = 0;
+  let blockedBySeen = 0;
   let candidates = filterCandidateRecipes(recipes, filter).filter((r) => {
     const id = videoIdOf(r.video_url);
     if (excluded[id]) { blockedByHistory++; return false; }
+    if (seenIds && seenIds[id]) { blockedBySeen++; return false; }
     return true;
   });
   // One idea per video.
@@ -504,9 +507,37 @@ export async function pickForMe(
   // When the no-repeat rule is what emptied the pool, say so plainly - a
   // bare "0 qualify" would read like the library has nothing at all.
   let finalNote = chosen.length < 5 && !noteZeroMatch ? `Only ${chosen.length} verified recipes qualify right now - no filler added.` : '';
+  if (blockedBySeen > 0) {
+    noteInfo = (noteInfo ? noteInfo + ' ' : '') +
+      blockedBySeen + ' checked ' + (blockedBySeen === 1 ? 'recipe was' : 'recipes were') +
+      ' skipped because you already saw ' + (blockedBySeen === 1 ? 'it' : 'them') + ' in this list.';
+  }
   if (chosen.length === 0 && !noteZeroMatch && blockedByHistory > 0) {
     finalNote = 'Every verified recipe under these filters was already suggested in the last 30 days - those ideas come back after that. Try a different filter, or ask for more recipes to be added.';
     noteInfo = noteInfo.replace(/, so the note was ranked by meaning/, ' directly, but nothing new was left to rank');
+  }
+
+  // Post-output validation: AI reasons are advisory taste notes and must
+  // never contradict the deterministic ingredient match. A reason denying a
+  // hard note word ("does not contain corn" on a corn-matched card) is false
+  // prose - hide the reason and say so; the card stands on its real match.
+  const noteReq = (kwN.words.length > 0
+    ? ([...new Set(kwN.pairs.filter((p) => p.interpreted || vocab.indexOf(p.word) !== -1).map((p) => p.word))])
+    : []) as string[];
+  let hiddenReasons = 0;
+  for (const r of chosen as any[]) {
+    const reason = String(r._reason || '');
+    if (!reason) continue;
+    for (const w of noteReq) {
+      const esc = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const deny = new RegExp("(does\\s*n['’]?t|does not|do not|not|without)\\s+(actually\\s+)?\\w{0,14}?(contain|have|include|use)\\w*\\b[^.;]*\\b" + esc + "\\b", 'i');
+      if (deny.test(reason)) { r._reason = ''; hiddenReasons++; break; }
+    }
+  }
+  if (hiddenReasons > 0) {
+    noteInfo = (noteInfo ? noteInfo + ' ' : '') +
+      (hiddenReasons === 1 ? 'One AI note was hidden because it contradicted the ingredient match - trust the match, not the note.' :
+        hiddenReasons + ' AI notes were hidden because they contradicted the ingredient match - trust the match, not the notes.');
   }
 
   const ids = chosen.map((r) => videoIdOf(r.video_url));
