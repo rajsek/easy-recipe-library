@@ -128,3 +128,21 @@ test('zero checked picks still get labelled video alternatives (no dead end)', a
     assert.ok(typeof v.status === 'string' && v.status.includes('details not extracted yet'));
   }
 });
+
+test('Load more: batches are disjoint and respect the same filters', async () => {
+  const post = (seen: string[]) => fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn', seen }) }).then((r) => r.json());
+  const idsOf = (j: any) => [...(j.picks || []).map((p: any) => String(p.url).match(/v=([\w-]{11})/)?.[1]), ...(j.videos || []).map((v: any) => v.video_id)].filter(Boolean);
+  const b1 = await post([]);
+  const ids1 = idsOf(b1);
+  assert.ok(ids1.length >= 4, 'first batch non-empty, got ' + ids1.length);
+  const b2 = await post(ids1);
+  const ids2 = idsOf(b2);
+  assert.ok(ids2.length >= 1, 'second batch non-empty');
+  assert.ok(!ids2.some((id: string) => ids1.includes(id)), 'no duplicates across batches');
+  const b3 = await post([...ids1, ...ids2]);
+  const ids3 = idsOf(b3);
+  assert.ok(!ids3.some((id: string) => ids1.includes(id) || ids2.includes(id)), 'third batch still disjoint');
+  for (const v of [...(b2.videos || []), ...(b3.videos || [])]) {
+    assert.equal(v.status, 'video found - details not extracted yet', 'labels survive paging');
+  }
+});
