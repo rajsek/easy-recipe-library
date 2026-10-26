@@ -140,7 +140,7 @@ test('positive note keyword: deterministic boost, name match wins', async () => 
   ];
   const r = await pickForMe({}, 'pepper', rows as any, {});
   assert.deepEqual(r.picks.map((p) => p.name), ['Pepper Rasam'], 'note keyword is a hard filter, not a boost');
-  assert.match(r.noteInfo, /match at least one of "pepper"/);
+  assert.match(r.noteInfo, /match "pepper"/);
 });
 
 test('note "bread" + veg + snack: only bread recipes returned, never an unrelated snack', async () => {
@@ -150,7 +150,7 @@ test('note "bread" + veg + snack: only bread recipes returned, never an unrelate
   ];
   const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'bread', rows as any, {});
   assert.deepEqual(r.picks.map((p) => p.name), ['Besan Bread Toast']);
-  assert.match(r.noteInfo, /match at least one of "bread"/);
+  assert.match(r.noteInfo, /match "bread"/);
 });
 
 test('note keyword nothing matches: honest zero, no filler', async () => {
@@ -283,7 +283,7 @@ test('typo tolerance: unambiguous edit-distance-1 typo normalizes to the library
   const r = await pickForMe({ diet: 'Veg' }, 'onin', RECIPES, ex);
   assert.deepEqual(r.interpreted, [{ from: 'onin', to: 'onion' }]);
   assert.ok(r.count > 0, 'onion typo still matches onion recipes');
-  assert.ok(/match at least one of "onion"/.test(r.noteInfo), 'normalized word visible: ' + r.noteInfo);
+  assert.ok(/match "onion"/.test(r.noteInfo), 'normalized word visible: ' + r.noteInfo);
 });
 
 test('typo ambiguity never guesses: word stays as written and yields an honest zero', async () => {
@@ -300,13 +300,27 @@ test('typo tolerance: no normalization for short words, unknown words, or words 
   assert.equal(normalizeNoteWord('onion', ['onion', 'paneer']).word, 'onion');
 });
 
-test('note keywords are ORed and say so plainly: "onion, panner" yields onion snacks with the typo interpreted', async () => {
+test('note keywords are ANDed and say so plainly: "onion, panner" means BOTH, typo interpreted', async () => {
+  const rows = [
+    { recipe_name: 'Onion Pakoda', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH1', diet: 'Veg', meal_type: 'snack', ingredients: 'onion, besan, chilli', verified: 'yes' },
+    { recipe_name: 'Paneer Corn Kebab', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH2', diet: 'Veg', meal_type: 'snack', ingredients: 'paneer, sweet corn, onion, besan', verified: 'yes' },
+    { recipe_name: 'Paneer Toast', video_url: 'https://www.youtube.com/watch?v=HHHHHHHHHH3', diet: 'Veg', meal_type: 'snack', ingredients: 'paneer, bread', verified: 'yes' },
+  ];
   const ex = excludedIds([], [], NOW);
-  const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'onion, panner', RECIPES, ex);
-  assert.ok(r.count > 0, 'onion-matching snacks qualify');
+  const r = await pickForMe({ diet: 'Veg', meal: 'snack' }, 'onion, panner', rows as any, ex);
+  assert.deepEqual(r.picks.map((p) => p.name), ['Paneer Corn Kebab'], 'only the recipe with BOTH onion and paneer survives');
   assert.deepEqual(r.interpreted, [{ from: 'panner', to: 'paneer' }]);
   assert.ok(/interpreted "panner" as "paneer"/.test(r.noteInfo), 'interpretation visible');
-  assert.ok(/match at least one of "onion", "paneer"/.test(r.noteInfo), 'OR wording is explicit: ' + r.noteInfo);
+  assert.ok(/match every one of "onion", "paneer"/.test(r.noteInfo), 'AND wording is explicit: ' + r.noteInfo);
+});
+
+test('a question word is never interpreted as an ingredient: "what" is not "wheat"', async () => {
+  const { normalizeNoteWord } = await import('./pick.js');
+  const n = normalizeNoteWord('what', ['wheat', 'onion']);
+  assert.equal(n.word, 'what');
+  assert.equal(n.interpreted, undefined);
+  assert.equal(normalizeNoteWord('when', ['whey', 'onion']).word, 'when');
+  assert.equal(normalizeNoteWord('meal', ['meat', 'onion']).word, 'meal');
 });
 
 test('no-match wording is transparent: coverage counts, interpretation, library-gap honesty', async () => {
@@ -368,7 +382,7 @@ test('ask constraints: a library ingredient stays a hard filter even with NO cla
   const snackPool = paneer.filter((r) => r.meal_type === 'snack');
   // Classifier returned NOTHING (provider failure): paneer must still hard-filter.
   const { zeroReason } = constrainAskCandidates(snackPool, 'paneer snacks?', { titles: {}, videoOnly: {} }, {}, undefined, paneer);
-  assert.match(String(zeroReason), /current filters/, 'qualified absence: none under these filters');
+  assert.match(String(zeroReason), /outside your current diet\/meal filters/, 'qualified absence: none under these filters');
   assert.match(String(zeroReason), /Paneer Butter Masala/, 'names the out-of-filter recipes the library does have');
 });
 
