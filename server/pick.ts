@@ -103,6 +103,19 @@ export function noteVocab(recipes: RecipeRow[]): string[] {
   return [...words];
 }
 
+/** Words from the INGREDIENTS column only: membership here marks a true
+ * ingredient, which a classifier 'mood' label can never demote. */
+export function ingredientVocab(recipes: RecipeRow[]): string[] {
+  const words = new Set<string>();
+  for (const r of recipes) {
+    if (String(r.verified).toLowerCase() !== 'yes') continue;
+    for (const w of String(r.ingredients || '').toLowerCase().split(/[^a-z]+/)) {
+      if (w.length >= 4 && !NOTE_STOP.has(w)) words.add(w);
+    }
+  }
+  return [...words];
+}
+
 export interface NoteInterpretation { from: string; to: string; }
 
 // Normalizes one note word to a library word only when the match is
@@ -224,8 +237,9 @@ export function constrainAskCandidates(
   // already-filtered pool - "paneer" is paneer even when the snack pool
   // has none.
   const wideV = allVerified && allVerified.length ? noteVocab(allVerified) : v;
+  const wideIng = allVerified && allVerified.length ? ingredientVocab(allVerified) : [];
   const foodWords = kwN.pairs
-    .filter((p) => (classification[p.orig] === 'food' || p.interpreted || (wideV.includes(p.word) && classification[p.orig] !== 'mood')) && !ASK_REQUEST_WORDS.has(p.word))
+    .filter((p) => (classification[p.orig] === 'food' || p.interpreted || wideIng.includes(p.word) || (wideV.includes(p.word) && classification[p.orig] !== 'mood')) && !ASK_REQUEST_WORDS.has(p.word))
     .map((p) => p.word);
   if (foodWords.length > 0) {
     const matched = out.filter((r) => {
