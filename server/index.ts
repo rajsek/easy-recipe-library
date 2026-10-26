@@ -227,8 +227,15 @@ app.post('/api/ask-ai', async (req, res) => {
     }
     const { candidates, zeroReason, interpreted } = constrainAskCandidates(base, question, ex, cls, vocab, filterCandidateRecipes(recipes as any, {}));
     if (zeroReason) {
-      await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer', handling: 'no candidates; no model call', status: 'ok' });
-      return res.json({ answer: zeroReason, request_id: traceId, interpreted, session: sessionEcho });
+      // Honest zero still offers full-corpus video ideas, clearly labelled
+      // unextracted - a gap in the checked cards is not a dead end.
+      let zeroVideos: any[] = [];
+      try {
+        const found = await retrieveVideos(question + ' ' + diet + ' ' + meal, 10, {});
+        if (found) zeroVideos = found.filter((v) => v.score >= 0.45).slice(0, 8).map((v) => ({ title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, status: 'video found - details not extracted yet' }));
+      } catch { zeroVideos = []; }
+      await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer + ' + zeroVideos.length + ' video alternatives', handling: 'no candidates; no model call', status: 'ok' });
+      return res.json({ answer: zeroReason + (zeroVideos.length > 0 ? ' Videos below are library matches whose ingredients and steps are not extracted yet.' : ''), request_id: traceId, interpreted, session: sessionEcho, videos: zeroVideos });
     }
     // Meaning-aware slim: large pools shrink to the 25 most relevant
     // candidates before the model sees anything - smaller prompt, fewer
