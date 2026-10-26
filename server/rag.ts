@@ -17,13 +17,15 @@ export interface VideoMatch {
 }
 
 interface Artifact {
-  model: string; revision: string; dim: number; count: number; library: string; generated: string;
+  model: string; revision: string; dim: number; quantization?: string; count: number; library: string; generated: string;
   videos: [string, string, string, string, string, string][];
-  vectors_b64_f32: string;
+  vectors_b64_f32?: string;
+  vectors_b64_i8?: string;
 }
 
 let art: Artifact | null | undefined; // undefined = not tried, null = unavailable
 let vecs: Float32Array | null = null;
+let artError = '';
 
 function loadArtifact(): boolean {
   if (art !== undefined) return art !== null;
@@ -31,16 +33,25 @@ function loadArtifact(): boolean {
     const here = path.dirname(fileURLToPath(import.meta.url));
     const raw = readFileSync(path.join(here, 'demo-embeddings.json'), 'utf8');
     art = JSON.parse(raw);
-    vecs = new Float32Array(Buffer.from(art!.vectors_b64_f32, 'base64').buffer);
+    if (art!.vectors_b64_i8) {
+      const q = new Int8Array(Buffer.from(art!.vectors_b64_i8, 'base64').buffer);
+      vecs = new Float32Array(q.length);
+      for (let i = 0; i < q.length; i++) vecs[i] = q[i] / 127;
+    } else if (art!.vectors_b64_f32) {
+      vecs = new Float32Array(Buffer.from(art!.vectors_b64_f32, 'base64').buffer);
+    } else {
+      throw new Error('no vectors');
+    }
     return true;
-  } catch {
+  } catch (e) {
     art = null; vecs = null;
+    artError = String(e && (e as Error).message || e).slice(0, 160);
     return false;
   }
 }
 
-export function ragStatus(): { ready: boolean; count: number; library?: string; generated?: string } {
-  if (!loadArtifact()) return { ready: false, count: 0 };
+export function ragStatus(): { ready: boolean; count: number; library?: string; generated?: string; error?: string } {
+  if (!loadArtifact()) return { ready: false, count: 0, error: artError || 'unknown' };
   return { ready: true, count: art!.count, library: art!.library, generated: art!.generated };
 }
 
