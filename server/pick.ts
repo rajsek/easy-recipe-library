@@ -84,7 +84,10 @@ export interface PickFilter { diet?: string; meal?: string; }
 // Words that describe the request itself, never an ingredient - excluded
 // from the food-word hard filter in ask mode.
 const ASK_REQUEST_WORDS = new Set(('breakfast lunch dinner snack snacks sweet sweets sunday meal meals ' +
-  'recipe recipes dish dishes food cook cooking make idea ideas quick easy today tonight tomorrow week weekday weekend').split(' '));
+  'recipe recipes dish dishes food cook cooking make idea ideas quick easy today tonight tomorrow week weekday weekend ' +
+  'which what who whom whose when where why how do does did me my we our us you your have has had any some show give list tell ' +
+  'is are was were be been the in on for of to at by with without and or not no can could should would will please get got ' +
+  'something anything everything').split(' '));
 
 // The ask-ai route's hard constraints, mirroring pick rules:
 //  - "no X" / "without X" exclusions are ALWAYS hard
@@ -96,7 +99,7 @@ const ASK_REQUEST_WORDS = new Set(('breakfast lunch dinner snack snacks sweet sw
 export function constrainAskCandidates(
   candidates: RecipeRow[],
   question: string,
-  excluded: Record<string, true>,
+  excluded: AskExclusions,
   classification: Record<string, string>
 ): { candidates: RecipeRow[]; zeroReason?: string } {
   const parsed = parseNote(question);
@@ -108,11 +111,16 @@ export function constrainAskCandidates(
     });
   }
   const q = question.toLowerCase();
+  const shortOf = (s: string) => String(s || '').split('(')[0].trim().toLowerCase();
   out = out.filter((r) => {
+    const short = shortOf(r.recipe_name);
+    if (short.length >= 4 && q.indexOf(short) !== -1) return true; // asked about by name: always answerable
     const id = videoIdOf(r.video_url);
-    if (!excluded[id]) return true;
-    const short = r.recipe_name.split('(')[0].trim().toLowerCase();
-    return short.length >= 4 && q.indexOf(short) !== -1;
+    if (excluded.videoOnly[id]) return false;
+    return !(excluded.titles[id] || []).some((t) => {
+      const ts = shortOf(t);
+      return ts.length >= 4 && (ts === short || short.startsWith(ts) || ts.startsWith(short));
+    });
   });
   const foodWords = parsed.keywords.filter((k) => classification[k] === 'food' && !ASK_REQUEST_WORDS.has(k));
   if (foodWords.length > 0) {
@@ -174,6 +182,34 @@ export function excludedIds(history: any[], picks: any[], now = new Date()): Rec
     }
   }
   return ex;
+}
+
+// Ask-route no-repeat, dish-aware: a history row records WHICH dish was
+// suggested/cooked (video + title), so sibling dishes from the same video
+// stay answerable - one-idea-per-video is pick dedupe ONLY. Pick rows store
+// video ids without dish names, so those entries conservatively hide the
+// whole video (one of its dishes was shown; we cannot tell which).
+export interface AskExclusions { titles: Record<string, string[]>; videoOnly: Record<string, true>; }
+
+export function excludedForAsk(history: any[], picks: any[], now = new Date()): AskExclusions {
+  const cut = new Date(now); cut.setDate(cut.getDate() - 30);
+  const titles: Record<string, string[]> = {};
+  const videoOnly: Record<string, true> = {};
+  for (const r of history || []) {
+    if (r.state !== 'suggested' && r.state !== 'cooked') continue;
+    if (!(new Date(r.date) >= cut) || !r.video_id) continue;
+    const v = String(r.video_id);
+    const t = String(r.title || '').trim();
+    if (t) (titles[v] = titles[v] || []).push(t);
+    else videoOnly[v] = true;
+  }
+  for (const r of picks || []) {
+    if (new Date(r.date) < cut) continue;
+    for (const id of String(r.suggested_video_ids || '').split(',')) {
+      const t = id.trim(); if (t) videoOnly[t] = true;
+    }
+  }
+  return { titles, videoOnly };
 }
 
 export type RankFn = (candidates: RecipeRow[], filter: PickFilter, note: string)
