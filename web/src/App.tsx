@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; diet: string; published: string; status: string; }
 interface Recipe { name: string; url: string; channel: string; diet: string; meal: string; time: string; ingredients: string; steps: string[]; source: string; partial: boolean; }
 interface HistoryEntry { date: string; id: string; title: string; state: string; }
-interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: string; picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[]; }
+interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: string; interpreted?: { from: string; to: string }[]; picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[]; }
 
 // All /api calls go through apiFetch: it attaches the saved app token and,
 // on 401, drops the token and asks the app to show the unlock form again.
@@ -396,6 +396,9 @@ export default function App() {
               <p className="muted span-all">Note or filters changed since these picks - press "Give me 5 ideas" to refresh.</p>
             )}
             {pickResult.note && <p className="muted span-all">{pickResult.note}</p>}
+            {pickResult.interpreted && pickResult.interpreted.length > 0 && (
+              <p className="muted span-all">Interpreted as: {pickResult.interpreted.map((i) => i.to + ' (from "' + i.from + '")').join(', ')}</p>
+            )}
             {pickResult.noteInfo && <p className="muted span-all">{pickResult.noteInfo}</p>}
             {!pickResult.usedAI && (
               <p className="muted span-all">AI ranking is off until you choose a provider; these are unranked matches. Ask in chat for a reasoned pick.</p>
