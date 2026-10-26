@@ -157,8 +157,11 @@ app.post('/api/ask-ai', async (req, res) => {
     }
     const { candidates, zeroReason } = constrainAskCandidates(base, question, ex, cls);
     if (zeroReason) return res.json({ answer: 'No verified recipe in your library matches that under these filters - nothing invented to fill the gap. Try different words or fewer filters.' });
-    const answer = await askFn(candidates, question, { diet, meal });
-    res.json({ answer });
+    const { text, recipes: cited } = await askFn(candidates, question, { diet, meal });
+    res.json({
+      answer: text,
+      recipes: cited.map((r: any) => ({ name: r.recipe_name, url: r.video_url, time: r.time_notes || '', diet: r.diet || '', meal: r.meal_type || '', reason: '' })),
+    });
   } catch {
     res.status(502).json({ error: 'The AI answer failed this time - please try again.' });
   }
