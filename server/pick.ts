@@ -176,6 +176,11 @@ export async function pickForMe(
     if (matched.length > 0) {
       candidates = matched;
       parts.push('showing only recipes whose name or ingredients match ' + parsed.keywords.map((k) => '"' + k + '"').join(', '));
+    } else if (rankFn) {
+      // A word nothing mentions literally (a mood like "light") must not
+      // zero the result when AI is available: the ranker interprets the
+      // note over the rule-filtered candidates instead, and says so.
+      parts.push('no recipe name or ingredient mentions ' + parsed.keywords.map((k) => '"' + k + '"').join(', ') + ' directly, so the note was ranked by meaning');
     } else {
       candidates = [];
       noteZeroMatch = true;
