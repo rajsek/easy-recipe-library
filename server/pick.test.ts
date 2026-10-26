@@ -433,3 +433,15 @@ test('post-output validation: a truthful reason survives', async () => {
   assert.equal(r.picks[0].reason, 'Crispy snack, corn starch gives the crunch');
   assert.ok(!/hidden/i.test(r.noteInfo));
 });
+
+test('Load more: seen ids are excluded from the next batch and disclosed (browsing, not history)', async () => {
+  const rows = [
+    { recipe_name: 'Corn Dosa', video_url: 'https://www.youtube.com/watch?v=aaaaaaaaaaa', channel: 'X', diet: 'Veg', meal_type: 'Dinner', time_notes: '', ingredients: 'corn, rice', steps: 's', source_note: '', verified: 'yes', date_checked: '' },
+    { recipe_name: 'Corn Upma', video_url: 'https://www.youtube.com/watch?v=bbbbbbbbbbb', channel: 'X', diet: 'Veg', meal_type: 'Dinner', time_notes: '', ingredients: 'corn, rava', steps: 's', source_note: '', verified: 'yes', date_checked: '' }
+  ];
+  const r1 = await pickForMe({}, 'corn', rows as any, {}, undefined, undefined, undefined, { aaaaaaaaaaa: true } as any);
+  assert.deepEqual(r1.picks.map((p) => p.name), ['Corn Upma'], 'seen card not shown again');
+  assert.ok(/already saw/.test(r1.noteInfo), 'seen exclusion disclosed');
+  const r2 = await pickForMe({}, 'corn', rows as any, {}, undefined, undefined, undefined, { aaaaaaaaaaa: true, bbbbbbbbbbb: true } as any);
+  assert.equal(r2.picks.length, 0, 'everything seen means an honest empty batch');
+});
