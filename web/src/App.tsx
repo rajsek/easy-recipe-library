@@ -361,6 +361,19 @@ export default function App() {
             {!pickResult.usedAI && (
               <p className="muted span-all">AI ranking is off until you choose a provider; these are unranked matches. Ask in chat for a reasoned pick.</p>
             )}
+            <p className="span-all">
+              <a
+                className="btn"
+                href={'https://wa.me/?text=' + encodeURIComponent(
+                  'Meal pick request from my recipe app:\n' +
+                  'Diet: ' + (pdiet || 'Veg + Non-veg') + '\n' +
+                  'Meal: ' + (pmeal || 'any') +
+                  (pnote.trim() ? '\nNote: ' + pnote.trim() : '') +
+                  '\nPlease pick from my recipe library.'
+                )}
+                target="_blank" rel="noopener"
+              >Ask in WhatsApp (sends this request to your Instinct chat)</a>
+            </p>
             {pickResult.picks.map((p) => (
               <article className="card" key={p.name}>
                 <a className="thumb" href={p.url} target="_blank" rel="noopener">
