@@ -11,7 +11,7 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode
@@ -146,7 +146,14 @@ app.get('*', (_req, res, next) => {
   res.sendFile(path.join(dist, 'index.html'), (err) => { if (err) next(); });
 });
 
-const port = Number(process.env.PORT || 3000);
-app.listen(port, HOST, () => {
-  console.log(`Easy Recipe Library (${mode} mode, AI ${rankFn ? 'ON' : 'off'}, auth ${APP_TOKEN ? 'ON' : 'off'}) -> http://${HOST}:${port}`);
-});
+// Exported for serverless hosts (e.g. Vercel zero-config Express, which
+// imports this module instead of running it). Local runs still call listen().
+export default app;
+
+const isDirectRun = process.argv[1] ? import.meta.url === pathToFileURL(process.argv[1]).href : false;
+if (isDirectRun) {
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, HOST, () => {
+    console.log(`Easy Recipe Library (${mode} mode, AI ${rankFn ? 'ON' : 'off'}, auth ${APP_TOKEN ? 'ON' : 'off'}) -> http://${HOST}:${port}`);
+  });
+}
