@@ -17,7 +17,7 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds } from './pick.js';
+import { pickForMe, excludedIds, filterCandidateRecipes } from './pick.js';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -140,8 +140,11 @@ app.post('/api/ask-ai', async (req, res) => {
   const meal = String(req.body?.meal || '');
   if (diet && !['Veg', 'Non-veg', 'Egg', 'Contains egg'].includes(diet)) return res.status(400).json({ error: 'bad diet' });
   try {
-    const recipes = await getRecipeRows();
-    const answer = await askFn(recipes as any, question, { diet, meal });
+    // Same hard constraints as picks: the answerer only ever sees recipes
+    // that passed the shared verified/diet/meal filter, and every recipe it
+    // names is server-validated against that exact list (see ai.ts).
+    const recipes = filterCandidateRecipes(await getRecipeRows() as any, { diet, meal });
+    const answer = await askFn(recipes, question, { diet, meal });
     res.json({ answer });
   } catch {
     res.status(502).json({ error: 'The AI answer failed this time - please try again.' });
