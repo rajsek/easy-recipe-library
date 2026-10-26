@@ -17,7 +17,7 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds, filterCandidateRecipes } from './pick.js';
+import { pickForMe, excludedIds, filterCandidateRecipes, constrainAskCandidates, parseNote } from './pick.js';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -140,11 +140,24 @@ app.post('/api/ask-ai', async (req, res) => {
   const meal = String(req.body?.meal || '');
   if (diet && !['Veg', 'Non-veg', 'Egg', 'Contains egg'].includes(diet)) return res.status(400).json({ error: 'bad diet' });
   try {
-    // Same hard constraints as picks: the answerer only ever sees recipes
-    // that passed the shared verified/diet/meal filter, and every recipe it
-    // names is server-validated against that exact list (see ai.ts).
-    const recipes = filterCandidateRecipes(await getRecipeRows() as any, { diet, meal });
-    const answer = await askFn(recipes, question, { diet, meal });
+    // Same hard constraints as picks: verified/diet/meal via the shared
+    // filter, then the ask route's own rules - hard "no X" exclusions, the
+    // 30-day no-repeat (unless the question names the dish), and explicit
+    // food words as hard requirements with an honest zero, never invention.
+    const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(), getPickRows()]);
+    const ex = excludedIds(
+      mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
+      mode === 'demo' ? [...picks, ...demoPicks] : picks
+    );
+    const base = filterCandidateRecipes(recipes as any, { diet, meal });
+    const keywords = parseNote(question).keywords;
+    let cls: Record<string, string> = {};
+    if (classifyFn && keywords.length > 0) {
+      try { cls = await classifyFn(keywords); } catch { cls = {}; }
+    }
+    const { candidates, zeroReason } = constrainAskCandidates(base, question, ex, cls);
+    if (zeroReason) return res.json({ answer: 'No verified recipe in your library matches that under these filters - nothing invented to fill the gap. Try different words or fewer filters.' });
+    const answer = await askFn(candidates, question, { diet, meal });
     res.json({ answer });
   } catch {
     res.status(502).json({ error: 'The AI answer failed this time - please try again.' });
