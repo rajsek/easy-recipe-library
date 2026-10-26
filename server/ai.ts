@@ -11,7 +11,7 @@
  * Sheet details are never sent.
  *
  * Supported providers (AI_PROVIDER value -> required env):
- *   groq       -> GROQ_API_KEY        (model override: GROQ_MODEL)
+ *   groq       -> GROQ_API_KEY        (default model openai/gpt-oss-120b; override: GROQ_MODEL)
  *   cloudflare -> CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN
  *                 (model override: CLOUDFLARE_MODEL)
  *   gemini     -> GEMINI_API_KEY      (model override: GEMINI_MODEL)
@@ -47,7 +47,7 @@ async function chatGroq(prompt: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.GROQ_API_KEY },
     body: JSON.stringify({
-      model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      model: process.env.GROQ_MODEL || 'openai/gpt-oss-120b',
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.2
     }),
