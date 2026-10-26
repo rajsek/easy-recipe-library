@@ -103,10 +103,17 @@ export function cosine(a: number[], b: number[]): number {
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 }
 
-/** Embed texts; null when the model is unavailable (callers fall back). */
+/**
+ * Embed texts; null when the model is unavailable (callers fall back).
+ * NEVER blocks a user request on the 22MB model download: a cold instance
+ * starts the bounded load in the BACKGROUND and serves the deterministic
+ * path now; later requests on the warm instance use it once ready.
+ */
 export async function embed(texts: string[]): Promise<number[][] | null> {
-  if (!embedFn) await loadSemantic();
-  if (!embedFn) return null;
+  if (!embedFn) {
+    if (!loadPromise) loadSemantic().catch(() => {}); // background, bounded
+    return null;
+  }
   try {
     return await embedFn(texts);
   } catch {
