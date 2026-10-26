@@ -247,7 +247,8 @@ export default function App() {
   const [askMode, setAskMode] = useState<'ai' | 'whatsapp'>('ai');
   const [askAiState, setAskAiState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle');
   interface AskRecipe { name: string; url: string; time: string; diet: string; meal: string; reason: string }
-  const [askAiResult, setAskAiResult] = useState<{ text: string; recipes: AskRecipe[]; question: string; diet: string; meal: string } | null>(null);
+  interface AskVideo { title: string; url: string; channel: string; status: string }
+  const [askAiResult, setAskAiResult] = useState<{ text: string; recipes: AskRecipe[]; videos?: AskVideo[]; question: string; diet: string; meal: string } | null>(null);
   const [askAiError, setAskAiError] = useState('');
   // App-managed conversation: the AI provider is stateless; the server keeps
   // a compact session (diet/meal/exclusions/last ideas) keyed by this id so
@@ -305,7 +306,7 @@ export default function App() {
       });
       if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'could not get an answer'); }
       const j = await r.json();
-      setAskAiResult({ text: j.answer, recipes: j.recipes || [], question: q, diet: j.session?.diet ?? d, meal: j.session?.meal ?? m });
+      setAskAiResult({ text: j.answer, recipes: j.recipes || [], videos: j.videos || [], question: q, diet: j.session?.diet ?? d, meal: j.session?.meal ?? m });
       setSessionInfo(j.session ? { continued: !!j.session.continued, diet: j.session.diet || '', meal: j.session.meal || '' } : null);
       apiFetch('/api/state').then((r) => r.json()).then((s) => setSemanticInfo(s.semantic || null)).catch(() => {});
       setAskAiState('done');
@@ -486,6 +487,13 @@ export default function App() {
                         <h3>{p.name}</h3>
                         <Chips diet={p.diet} meal={p.meal} time={p.time} />
                         <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
+                      </div>
+                    ))}
+                    {(askAiResult.videos || []).map((v) => (
+                      <div key={v.url} style={{ borderTop: '1px solid #e5e0d8', paddingTop: 8, marginTop: 8 }}>
+                        <h3>{v.title}</h3>
+                        <p className="chips"><span className="chip warn">{v.status}</span><span className="chip">{v.channel}</span></p>
+                        <a className="btn ghost" href={v.url} target="_blank" rel="noopener">Watch video</a>
                       </div>
                     ))}
                     <p className="muted">AI suggestion, not a nutrition, allergy or safety guarantee.</p>
