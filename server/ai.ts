@@ -151,76 +151,62 @@ export type ChatOnly = (prompt: string) => Promise<string>;
 // spans, which is how the models habitually write dish names. Both are
 // validated against the candidate aliases - a valid marked recipe must never
 // shield an invented unmarked one.
-function markerRefs(text: string): string[] {
-  const marked = [...text.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1].trim());
-  const bolded = [...text.matchAll(/\*\*([^*]+)\*\*/g)].map((m) => m[1].trim());
-  return [...marked, ...bolded];
-}
+export interface AskAnswer { text: string; recipes: RecipeRow[]; }
 
-// Acceptable reference forms per recipe: the full name and, for names like
-// "Ven Pongal (Chef Damu style, ...)", the part before the first parenthesis
-// - exact full-name reproduction is too brittle for long descriptive names.
-// A prefix shared by two recipes is ambiguous and accepted for NEITHER.
-export function referenceAliases(recipes: RecipeRow[]): Map<string, string> {
-  const alias = new Map<string, string>();
-  const ambiguous = new Set<string>();
-  for (const r of recipes) {
-    const full = r.recipe_name.trim();
-    const forms = [full];
-    const paren = full.indexOf('(');
-    if (paren > 0) forms.push(full.slice(0, paren).trim());
-    for (const f of forms) {
-      const key = f.toLowerCase();
-      if (!key) continue;
-      if (alias.has(key) && alias.get(key) !== full) { ambiguous.add(key); continue; }
-      alias.set(key, full);
-    }
-  }
-  for (const k of ambiguous) alias.delete(k);
-  return alias;
-}
-
+// Structured contract: the model cites candidates by NUMBER and the server
+// resolves those numbers to canonical library rows. Prose can never become a
+// recipe reference on its own - the cards the app shows come only from
+// validated ids, so an invented name has no way to render as a library recipe.
 export async function askWithValidation(
   chat: ChatOnly,
   recipes: RecipeRow[],
   question: string,
   filter: PickFilter
-): Promise<string> {
-  const aliases = referenceAliases(recipes);
+): Promise<AskAnswer> {
   const list = recipes
     .slice(0, 60)
-    .map((r) => '- ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
+    .map((r, i) => (i + 1) + '. ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
     .join('\n');
   const prompt =
     "You are the assistant inside a personal recipe library app. Answer the cook's question using ONLY the verified recipes below. " +
-    'When you mention a recipe, wrap its exact name in [[double brackets]] and do not bold or name any other dish - no other recipe names may appear in your answer. ' +
+    'Reply with strict JSON only, no other text: {"text": "your answer", "ids": [1, 2]}. ' +
+    '"ids" lists the numbers of the recipes your answer uses (empty array if none); mention a recipe in "text" only when its number is in "ids". ' +
     'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
     'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
-    'Keep the answer under 120 words.\n\nVerified recipes:\n' + list +
+    'Keep "text" under 120 words.\n\nVerified recipes:\n' + list +
     '\n\nFilters: ' + JSON.stringify(filter || {}) +
-    '\nQuestion: ' + question + '\nAnswer:';
-  let out = await chat(prompt);
-  let bad = markerRefs(out).filter((r) => !aliases.has(r.toLowerCase()));
-  if (bad.length > 0) {
-    out = await chat(
+    '\nQuestion: ' + question + '\nJSON:';
+  const parse = (s: string): { text: string; ids: number[] } | undefined => {
+    const m = s.match(/\{[\s\S]*\}/);
+    if (!m) return undefined;
+    try {
+      const j = JSON.parse(m[0]);
+      if (typeof j?.text !== 'string' || !Array.isArray(j?.ids)) return undefined;
+      return { text: j.text, ids: j.ids.filter((x: unknown) => Number.isInteger(x)) };
+    } catch { return undefined; }
+  };
+  const badIds = (ids: number[]) => ids.filter((i) => i < 1 || i > recipes.length);
+  let parsed = parse(await chat(prompt));
+  let bad = parsed ? badIds(parsed.ids) : [];
+  if (!parsed || bad.length > 0) {
+    parsed = parse(await chat(
       prompt +
-      '\n\nYour previous answer referenced recipes that are NOT in the library: ' + bad.join(', ') +
-      '. Answer again: use [[exact names]] from the list only, or no recipe references at all.'
-    );
-    bad = markerRefs(out).filter((r) => !aliases.has(r.toLowerCase()));
-    if (bad.length > 0) {
-      console.warn('ask-ai rejected answer: non-library recipe reference count:', bad.length);
-      throw new Error('AI answer referenced recipes outside the library');
+      '\n\nYour previous reply was invalid. Reply with strict JSON only: {"text": string, "ids": number[]} using list numbers 1-' + recipes.length + ' only.'
+    ));
+    bad = parsed ? badIds(parsed.ids) : [];
+    if (!parsed || bad.length > 0) {
+      console.warn('ask-ai rejected answer: invalid structured reference count:', parsed ? bad.length : -1);
+      throw new Error('AI answer failed reference validation');
     }
   }
-  // Strip markers, normalizing accepted aliases to the canonical full name.
-  return out
-    .replace(/\[\[([^\]]+)\]\]/g, (_m, ref) => aliases.get(String(ref).trim().toLowerCase()) || String(ref))
-    .replace(/\*\*([^*]+)\*\*/g, (_m, ref) => aliases.get(String(ref).trim().toLowerCase()) || String(ref))
-    .trim();
+  const seen = new Set<number>();
+  const cited = parsed.ids.filter((i) => !seen.has(i) && seen.add(i)).map((i) => recipes[i - 1]);
+  // Defensive: strip any residual markdown wrappers from the prose.
+  const text = parsed.text.replace(/\[\[([^\]]+)\]\]/g, '$1').replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+  return { text, recipes: cited };
 }
 
-export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<string>) | undefined {
+export function buildAskFn(): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<AskAnswer>) | undefined {
   const { chat } = resolveChat();
   if (!chat) return undefined;
   return (recipes, question, filter) => askWithValidation(chat, recipes, question, filter);
