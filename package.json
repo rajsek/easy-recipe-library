@@ -10,7 +10,7 @@
     "dev:web": "vite web",
     "build": "vite build web",
     "start": "tsx server/index.ts",
-    "test": "node --import tsx --test server/pick.test.ts"
+    "test": "node --import tsx --test server/*.test.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",
