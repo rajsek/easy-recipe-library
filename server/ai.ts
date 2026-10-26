@@ -178,21 +178,30 @@ export interface AskAnswer { text: string; recipes: RecipeRow[]; }
 // resolves those numbers to canonical library rows. Prose can never become a
 // recipe reference on its own - the cards the app shows come only from
 // validated ids, so an invented name has no way to render as a library recipe.
+export interface VideoRef { video_id: string; title: string; channel: string; url: string; status: string; }
+
 export async function askWithValidation(
   chat: ChatOnly,
   recipes: RecipeRow[],
   question: string,
   filter: PickFilter,
-  sink?: AiUsageSink
-): Promise<AskAnswer> {
+  sink?: AiUsageSink,
+  videos?: VideoRef[]
+): Promise<AskAnswer & { videos: VideoRef[] }> {
+  const vids = videos || [];
+  const vlist = vids.length
+    ? '\n\nLibrary videos (titles only - ingredients and steps NOT extracted yet):\n' +
+      vids.map((v, i) => 'V' + (i + 1) + '. ' + v.title + ' (' + v.channel + ')').join('\n')
+    : '';
   const list = recipes
     .slice(0, 60)
     .map((r, i) => (i + 1) + '. ' + r.recipe_name + ' (' + (r.diet || '') + ', ' + (r.meal_type || '') + '): ' + String(r.ingredients || '').slice(0, 140))
     .join('\n');
   const prompt =
     "You are the assistant inside a personal recipe library app. Answer the cook's question using ONLY the verified recipes below. " +
-    'Reply with strict JSON only, no other text: {"text": "your answer", "ids": [1, 2]}. ' +
+    'Reply with strict JSON only, no other text: {"text": "your answer", "ids": [1, 2], "vids": [1]}. ' +
     '"ids" lists the numbers of the recipes your answer uses (empty array if none); mention a recipe in "text" only when its number is in "ids". ' +
+    'When library videos are listed, "vids" lists their numbers for any video you suggest; always say a video\'s ingredients and steps are not extracted yet - never invent them, and offer up to 5 suggestions total across recipes and videos. ' +
     'If the question is not about cooking or these recipes, say you can only help with this recipe library. ' +
     'Never give medical, nutrition or allergy advice; tell the cook to check ingredients themselves. ' +
     'The cook may make typos: read an obvious spelling variant as the ingredient it means ("panner" = "paneer") and say so in "text" ("taking panner as paneer"). ' +
@@ -201,22 +210,24 @@ export async function askWithValidation(
     'The list below may be a FILTERED subset of the library: never claim the library as a whole lacks a dish or ingredient - say "none of these filtered recipes" and suggest loosening the filters instead. ' +
     'A recipe marked "Veg (needs ...)" is only conditionally vegetarian: when you cite one, state its condition (for example, that the dip needs eggless mayo) - never present it as plain veg. ' +
     'Keep "text" under 120 words.\n\nVerified recipes:\n' + list +
+    vlist +
     '\n\nFilters: ' + JSON.stringify(filter || {}) +
     '\nQuestion: ' + question + '\nJSON:';
-  const parse = (s: string): { text: string; ids: number[] } | undefined => {
+  const parse = (s: string): { text: string; ids: number[]; vids: number[] } | undefined => {
     const m = s.match(/\{[\s\S]*\}/);
     if (!m) return undefined;
     try {
       const j = JSON.parse(m[0]);
       if (typeof j?.text !== 'string' || !Array.isArray(j?.ids)) return undefined;
-      return { text: j.text, ids: j.ids.filter((x: unknown) => Number.isInteger(x)) };
+      return { text: j.text, ids: j.ids.filter((x: unknown) => Number.isInteger(x)), vids: Array.isArray(j?.vids) ? j.vids.filter((x: unknown) => Number.isInteger(x)) : [] };
     } catch { return undefined; }
   };
   const badIds = (ids: number[]) => ids.filter((i) => i < 1 || i > recipes.length);
+  const badVids = (vs: number[]) => vs.filter((i) => i < 1 || i > vids.length);
   const r1 = await chat(prompt);
   sink?.calls.push(r1.meta);
   let parsed = parse(r1.text);
-  let bad = parsed ? badIds(parsed.ids) : [];
+  let bad = parsed ? [...badIds(parsed.ids), ...badVids(parsed.vids)] : [];
   if (!parsed || bad.length > 0) {
     const r2 = await chat(
       prompt +
@@ -224,7 +235,7 @@ export async function askWithValidation(
     );
     sink?.calls.push(r2.meta);
     parsed = parse(r2.text);
-    bad = parsed ? badIds(parsed.ids) : [];
+    bad = parsed ? [...badIds(parsed.ids), ...badVids(parsed.vids)] : [];
     if (!parsed || bad.length > 0) {
       console.warn('ask-ai rejected answer: invalid structured reference count:', parsed ? bad.length : -1);
       throw new Error('AI answer failed reference validation');
@@ -234,11 +245,12 @@ export async function askWithValidation(
   const cited = parsed.ids.filter((i) => !seen.has(i) && seen.add(i)).map((i) => recipes[i - 1]);
   // Defensive: strip any residual markdown wrappers from the prose.
   const text = parsed.text.replace(/\[\[([^\]]+)\]\]/g, '$1').replace(/\*\*([^*]+)\*\*/g, '$1').trim();
-  return { text, recipes: cited };
+  const citedVids = parsed.vids.filter((i, n, arr) => arr.indexOf(i) === n).map((i) => vids[i - 1]);
+  return { text, recipes: cited, videos: citedVids };
 }
 
-export function buildAskFn(sink?: AiUsageSink): ((recipes: RecipeRow[], question: string, filter: PickFilter) => Promise<AskAnswer>) | undefined {
+export function buildAskFn(sink?: AiUsageSink): ((recipes: RecipeRow[], question: string, filter: PickFilter, videos?: VideoRef[]) => Promise<AskAnswer & { videos: VideoRef[] }>) | undefined {
   const { chat } = resolveChat();
   if (!chat) return undefined;
-  return (recipes, question, filter) => askWithValidation(chat, recipes, question, filter, sink);
+  return (recipes, question, filter, videos) => askWithValidation(chat, recipes, question, filter, sink, videos);
 }
