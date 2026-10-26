@@ -17,7 +17,7 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds, filterCandidateRecipes, constrainAskCandidates, parseNote } from './pick.js';
+import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote } from './pick.js';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -145,7 +145,7 @@ app.post('/api/ask-ai', async (req, res) => {
     // 30-day no-repeat (unless the question names the dish), and explicit
     // food words as hard requirements with an honest zero, never invention.
     const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(), getPickRows()]);
-    const ex = excludedIds(
+    const ex = excludedForAsk(
       mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
       mode === 'demo' ? [...picks, ...demoPicks] : picks
     );
