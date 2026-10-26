@@ -17,7 +17,7 @@ import {
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
   addQueueRequest, getQueueRequest
 } from './data.js';
-import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords } from './pick.js';
+import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords, typeaheadVocab } from './pick.js';
 import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION, loadSemantic } from './semantic.js';
 import { retrieveVideos, ragStatus } from './rag.js';
 import { getSession, putSession, clearSession, isMoreIntent, validSessionId } from './session.js';
@@ -72,6 +72,10 @@ app.get('/api/videos', async (req, res) => {
 });
 
 app.get('/api/recipes', async (_req, res) => res.json(await getRecipes()));
+
+// Canonical ingredient vocabulary for the ask-box typeahead: derived only
+// from the verified library, deterministic, no AI per keystroke.
+app.get('/api/ingredients', async (_req, res) => res.json({ ingredients: typeaheadVocab(await getRecipeRows() as any) }));
 
 app.get('/api/history', async (_req, res) => {
   const h = await getHistory();
