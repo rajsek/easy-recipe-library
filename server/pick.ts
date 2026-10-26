@@ -138,15 +138,11 @@ export async function pickForMe(
     seen[id] = true; return true;
   });
 
-  // Without AI ranking, choose at random among eligible recipes. The shuffle
-  // is seeded by the calendar day so re-tapping shows the same five within a
-  // day, while the pool rotates over time through the 30-day exclusion.
-  const seedBase = new Date();
-  let seed = (seedBase.getFullYear() * 10000 + (seedBase.getMonth() + 1) * 100 + seedBase.getDate()) % 2147483647;
-  if (seed <= 0) seed += 2147483646;
+  // Without AI ranking, choose at random among eligible recipes on every
+  // request. Each shown set is recorded as 'suggested' and excluded for 30
+  // days, so re-tapping always returns a fresh set, never the same ideas.
   for (let i = candidates.length - 1; i > 0; i--) {
-    seed = (seed * 16807) % 2147483647;
-    const j = seed % (i + 1);
+    const j = Math.floor(Math.random() * (i + 1));
     [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
   }
 
