@@ -331,7 +331,8 @@ export async function pickForMe(
   recipes: RecipeRow[],
   excluded: Record<string, true>,
   rankFn?: RankFn,
-  classifyFn?: ClassifyFn
+  classifyFn?: ClassifyFn,
+  slimFn?: ((candidates: RecipeRow[]) => Promise<RecipeRow[] | null>) | null
 ): Promise<PickResult> {
   let blockedByHistory = 0;
   let candidates = filterCandidateRecipes(recipes, filter).filter((r) => {
@@ -419,6 +420,13 @@ export async function pickForMe(
       : 'Your note ("' + note.trim().slice(0, 60) + '") could not be applied - free-text wishes need AI ranking, which is off. Picks below are standard unranked matches.';
   } else if (note && note.trim() && parts.length > 0) {
     noteInfo = 'Note constraints applied before ranking: ' + parts.join('; ') + '.';
+  }
+  // Meaning-aware slim AFTER every hard constraint, BEFORE the AI rank: the
+  // model sees the ~12 most relevant candidates instead of the whole pool -
+  // smaller prompt, fewer tokens. A slim failure (embeddings unavailable)
+  // keeps the full pool; nothing is blocked by it.
+  if (slimFn && candidates.length > 12) {
+    try { const slim = await slimFn(candidates); if (slim && slim.length) candidates = slim; } catch { /* keep full pool */ }
   }
   let chosen = candidates.slice(0, 5);
   if (rankFn && candidates.length > 0) {
