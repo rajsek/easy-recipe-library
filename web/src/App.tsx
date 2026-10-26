@@ -124,9 +124,9 @@ const ICON_SVG: Record<string, string> = {
 const ING_ICONS: [RegExp, string][] = [
   [/coriander leaves|cilantro|kothamalli|curry leaves|karuveppilai|mint|pudina/i, 'herb'],
   [/onion|shallot|vengayam/i, 'onion'], [/tomato|thakkali/i, 'tomato'], [/garlic|poondu/i, 'garlic'],
-  [/green chilli|red chilli|chilli|chili|milagai|pepper|milagu/i, 'chilli'],
+  [/green chilli|red chilli|chilli|chili|milagai|milakku/i, 'chilli'],
   [/potato|aloo|urulai|carrot|beetroot|ginger|inji|radish|mullangi/i, 'root'],
-  [/turmeric|manjal|cumin|jeera|seeragam|coriander powder|fennel|sombu|cardamom|elakkai|cinnamon|pattai|clove|krambu|ajwain|omam|masala|hing|perungayam|mustard|kadugu|tamarind|puli|salt|uppu|spice/i, 'spice'],
+  [/pepper|milagu|turmeric|manjal|cumin|jeera|seeragam|coriander powder|fennel|sombu|cardamom|elakkai|cinnamon|pattai|clove|krambu|ajwain|omam|masala|hing|perungayam|mustard|kadugu|tamarind|puli|salt|uppu|spice/i, 'spice'],
   [/rice|arisi|wheat|atta|maida|flour|maavu|besan|gram flour|rava|semolina|sooji|jowar|millet|cholam|bread|poha|aval|oats/i, 'grain'],
   [/\bdal\b|paruppu|lentil|soya|meal maker|\bbeans\b|\bpeas\b|pattani|chana|chickpea|kadalai|gram\b/i, 'legume'],
   [/oil|ennai/i, 'oil'],
