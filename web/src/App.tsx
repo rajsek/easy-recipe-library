@@ -237,6 +237,7 @@ export default function App() {
   const [channels, setChannels] = useState<string[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [ingVocab, setIngVocab] = useState<string[]>([]);
+  const [selIngs, setSelIngs] = useState<string[]>([]);
   const [taOpen, setTaOpen] = useState(false);
   const [taIndex, setTaIndex] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -325,14 +326,20 @@ export default function App() {
     const { start } = taCurrentToken();
     const el = noteInputRef.current;
     const pos = el ? el.selectionStart ?? pnote.length : pnote.length;
-    const next = pnote.slice(0, start) + choice + pnote.slice(pos);
-    setPnote(next); setTaOpen(false); setTaIndex(0);
-    requestAnimationFrame(() => { const e2 = noteInputRef.current; if (e2) { e2.focus(); const c = start + choice.length; e2.setSelectionRange(c, c); } });
+    setPnote((pnote.slice(0, start) + pnote.slice(pos)).replace(/ {2,}/g, ' '));
+    if (!selIngs.includes(choice)) setSelIngs([...selIngs, choice]);
+    setTaOpen(false); setTaIndex(0);
+    requestAnimationFrame(() => { const e2 = noteInputRef.current; if (e2) { e2.focus(); e2.setSelectionRange(start, start); } });
+  }
+  function composedNote(): string {
+    const free = pnote.trim();
+    if (selIngs.length === 0) return free;
+    return selIngs.join(', ') + (free ? ' - ' + free : '');
   }
   const taList = taOpen ? taMatches() : [];
   async function doAskAi() {
     setAskAiState('sending'); setAskAiError(''); setAskAiResult(null);
-    const q = pnote.trim(); const d = pdiet; const m = pmeal;
+    const q = composedNote(); const d = pdiet; const m = pmeal;
     try {
       const r = await apiFetch('/api/ask-ai', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -365,7 +372,7 @@ export default function App() {
     try {
       const r = await apiFetch('/api/pick', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ diet: pdiet, meal: pmeal, note: pnote })
+        body: JSON.stringify({ diet: pdiet, meal: pmeal, note: composedNote() })
       });
       setPickResult(await r.json());
       setPickForm({ note: pnote, diet: pdiet, meal: pmeal });
@@ -429,6 +436,14 @@ export default function App() {
             <p className="muted small">{dataMode === 'demo'
               ? 'Suggestions come only from checked recipes in a snapshot copy of your library (refreshed by the owner when the Sheet changes). Repeats are avoided only while this copy\'s memory lasts - it resets without warning.'
               : 'Suggestions come only from checked recipes, never repeated within 30 days.'}</p>
+            {selIngs.length > 0 && (
+              <div className="tachips" aria-label="selected ingredients">
+                {selIngs.map((v) => (
+                  <button key={v} type="button" className="tachip sel" title="remove"
+                    onClick={() => setSelIngs(selIngs.filter((x) => x !== v))}>{v}{' ×'}</button>
+                ))}
+              </div>
+            )}
             <input ref={noteInputRef} placeholder="Anything specific? (e.g. no onion, quick, for kids)" value={pnote}
               onChange={(e) => { setPnote(e.target.value); setTaOpen(true); setTaIndex(0); }}
               onKeyDown={(e) => {
