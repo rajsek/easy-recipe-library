@@ -87,7 +87,8 @@ p, li { font-size:14px; line-height:1.55; }
 /* Ingredient icon list: icons aid scanning, text stays the source of truth */
 .inglist { list-style:none; margin:4px 0 0; padding:0; }
 .inglist li { display:flex; gap:8px; align-items:baseline; font-size:13.5px; line-height:1.5; padding:1px 0; }
-.ingicon { flex:none; width:22px; text-align:center; font-size:14px; color:var(--muted); }
+.ingicon { flex:none; width:20px; display:inline-flex; align-items:center; justify-content:center; color:var(--leaf); }
+.ingicon svg { width:17px; height:17px; display:block; }
 
 /* Video list rows: flatter than cards so the grid keeps visual priority */
 .row { display:flex; gap:12px; align-items:flex-start; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:10px; margin-bottom:8px; }
