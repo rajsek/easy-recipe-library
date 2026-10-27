@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // The shared typeahead helpers live with the web app so the ingredient AND
 // dish filters use one implementation; tested here from the server suite.
-import { taFilter, taNav, toggleSel } from '../web/src/ta.js';
+import { taFilter, taNav, toggleSel, composePickNote } from '../web/src/ta.js';
 
 test('taFilter: prefix matches rank before inner matches, max 6, min 2 chars', () => {
   const vocab = ['Pongal', 'Ven Pongal', 'Poli', 'Paruppu Poli', 'Tomato Pongal', 'Podi', 'Paniyaram', 'Paneer Butter Masala'];
@@ -37,4 +37,25 @@ test('toggleSel: check adds once, uncheck removes - chips and checkbox lists sha
   assert.deepEqual(toggleSel(['pongal'], 'pongal'.toUpperCase()), ['pongal', 'PONGAL'], 'exact-string identity, no silent merge');
   const twice = toggleSel(toggleSel([], 'rice'), 'rice');
   assert.deepEqual(twice, [], 'toggle twice returns to empty - no duplicate possible');
+});
+
+// Typed dish text must reach the pick/ask request: the dish select list is
+// optional, so a typed-but-unselected entry (an ingredient like beetroot,
+// or any dish name) is searched instead of silently dropped (prod incident:
+// user typed "beetroot", request went out with dishes:[] note:"").
+test('composePickNote: typed dish alone is transmitted', () => {
+  assert.equal(composePickNote([], '', 'beetroot'), 'beetroot');
+  assert.equal(composePickNote([], 'quick', 'ven pongal'), 'ven pongal - quick');
+});
+test('composePickNote: ingredient chips lead, typed dish follows, free note last', () => {
+  assert.equal(composePickNote(['paneer'], 'no onion', 'beetroot'), 'paneer, beetroot - no onion');
+});
+test('composePickNote: empty/blank typed dish changes nothing', () => {
+  assert.equal(composePickNote([], '', ''), '');
+  assert.equal(composePickNote(['paneer'], 'quick', '   '), 'paneer - quick');
+  assert.equal(composePickNote([], 'for kids', ''), 'for kids');
+});
+test('composePickNote: chip and identical typed text dedup case-insensitively', () => {
+  assert.equal(composePickNote(['Beetroot'], '', 'beetroot'), 'Beetroot');
+  assert.equal(composePickNote([], 'beetroot', 'beetroot'), 'beetroot');
 });

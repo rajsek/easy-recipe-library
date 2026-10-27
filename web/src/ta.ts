@@ -26,3 +26,27 @@ export function taNav(key: string, index: number, len: number): TaNav {
 export function toggleSel(list: string[], item: string): string[] {
   return list.indexOf(item) !== -1 ? list.filter((x) => x !== item) : [...list, item];
 }
+
+// Compose the free-text note sent to /api/pick and /api/ask-ai. Selected
+// ingredient chips lead, then any dish text TYPED into the dish box: the
+// select list is optional, so a typed-but-unselected dish or ingredient
+// (e.g. "beetroot", which no chip exists for) must still be searched.
+// Server-side these words hard-match recipe name AND ingredients, and a
+// no-match is an honest zero, never an unrelated fallback. Case-insensitive
+// dedup so a word picked as a chip and also typed is not sent twice.
+export function composePickNote(ings: string[], free: string, typedDish: string): string {
+  const seen: Record<string, true> = {};
+  const parts: string[] = [];
+  for (const w of [...ings, typedDish]) {
+    const t = w.trim();
+    const k = t.toLowerCase();
+    if (!t || seen[k]) continue;
+    seen[k] = true;
+    parts.push(t);
+  }
+  const head = parts.join(', ');
+  const f = free.trim();
+  // Same words typed in both boxes collapse to one mention.
+  if (f && f.toLowerCase() === head.toLowerCase()) return head;
+  return head + (f ? (head ? ' - ' : '') + f : '');
+}

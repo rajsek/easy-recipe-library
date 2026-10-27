@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { taFilter, taNav, toggleSel } from './ta';
+import { taFilter, taNav, toggleSel, composePickNote } from './ta';
 import { sortedResults, type SortKey, type TimeBucket } from './result-sort';
 import { verifyToken } from './unlock';
 import { apiFetch, profileNameRef, setProfileNameGlobal, setAuthToken, setOnAuthRequired, setOnProfileChanged } from './api';
@@ -462,10 +462,11 @@ export default function App() {
     setTaOpen(false); setTaIndex(0);
     requestAnimationFrame(() => { const e2 = noteInputRef.current; if (e2) { e2.focus(); e2.setSelectionRange(start, start); } });
   }
+  // Typed dish text is part of the note: the dish select list is optional,
+  // so a typed-but-unselected entry (an ingredient like beetroot, or any
+  // dish name) is still searched instead of silently dropped.
   function composedNote(): string {
-    const free = pnote.trim();
-    if (selIngs.length === 0) return free;
-    return selIngs.join(', ') + (free ? ' - ' + free : '');
+    return composePickNote(selIngs, pnote, dishInput);
   }
   const taList = taOpen ? taMatches() : [];
   // Dish filter: same typeahead semantics as ingredients (shared taFilter /
@@ -690,9 +691,9 @@ export default function App() {
               </div>
             )}
             {dishOpen && dishInput.trim().length >= 2 && dishList.length === 0 && (
-              <p className="muted small">No dish in your checked library matches "{dishInput.trim()}".</p>
+              <p className="muted small">No listed dish matches "{dishInput.trim()}" - it will still be searched as free text.</p>
             )}
-            <p className="muted small">Pick one or more dishes - results match any selected dish.</p>
+            <p className="muted small">Pick dishes from the list, or just type one - typed text is searched even when it is not in the list.</p>
             <div className="cblistwrap">
               <div className="cblisthead">
                 <button type="button" className="btn ghost" aria-expanded={showDishList} onClick={() => setShowDishList(!showDishList)}>
