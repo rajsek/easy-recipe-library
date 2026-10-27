@@ -8,7 +8,7 @@
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "tsx watch server/index.ts",
     "dev:web": "vite web",
-    "build": "tsc --noEmit -p web && vite build web && node scripts/prune-onnx.mjs",
+    "build": "tsc --noEmit -p web && vite build web",
     "start": "tsx server/index.ts",
     "test": "node --import tsx --test server/*.test.ts"
   },

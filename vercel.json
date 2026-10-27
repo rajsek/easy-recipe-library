@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run build && node scripts/prune-onnx.mjs",
   "functions": {
     "server.ts": {
       "includeFiles": "{web/dist/**,server/demo-data.json,server/demo-embeddings.json}"
