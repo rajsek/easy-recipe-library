@@ -998,35 +998,43 @@ export default function App() {
                     {d.slots.map((s: any) => (
                       <li key={s.slot} className="plan-slot">
                         <span className="plan-slot-name">{s.slot}</span>
-                        {s.recipe ? (<>
-                          {thumb(s.recipe.url) && <img className="plan-thumb" src={thumb(s.recipe.url)} alt="" loading="lazy" />}
-                          <span className="plan-slot-body">
-                            <a href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
-                            {s.recipe.partial && <span className="muted"> (partial)</span>}
-                            <span className="muted"> image: video preview, not a verified dish photo</span>
-                            {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="muted"> - side dish; {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
-                            {' '}
-                            {s.recipe.nutrition && s.recipe.nutrition.eligible && s.recipe.nutrition_per_portion ? (
-                              <span className="plan-nutrition">
-                                <span className="plan-nutrition-batch"><b>Whole recipe batch:</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
-                                <span className="plan-nutrition-portion"><b>Per portion</b> ({s.recipe.portion_assumption}): ~{s.recipe.nutrition_per_portion.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition_per_portion.protein_g}g, fat {s.recipe.nutrition_per_portion.fat_g}g, carbs {s.recipe.nutrition_per_portion.carb_g}g, fibre {s.recipe.nutrition_per_portion.fibre_g}g</span>
-                                {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small"> ({s.recipe.nutrition.notes.join('; ')})</span>}
-                                {s.recipe.nutrition.approx_used && <span className="muted small"> (includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand)</span>}
-                              </span>
-                            ) : (
-                              <span className="muted">nutrition not shown - {s.recipe.nutrition && s.recipe.nutrition.ineligible_reasons && s.recipe.nutrition.ineligible_reasons.length > 0 ? s.recipe.nutrition.ineligible_reasons[0] : 'source is missing critical quantities'}</span>
-                            )}
-                            {s.recipe.ingredients && s.recipe.ingredients.length > 0 && (
-                              <details className="plan-ing"><summary>Ingredients (as stated in source)</summary>
-                                <ul>{s.recipe.ingredients.map((line: string, i: number) => <li key={i}>{line}</li>)}</ul>
-                              </details>
-                            )}
-                          </span>
-                        </>) : <span className="muted">no extracted card for this slot yet</span>}
+                        {s.recipe ? (
+                          <div className="plan-meal">
+                            {thumb(s.recipe.url) && <img className="plan-thumb" src={thumb(s.recipe.url)} alt="" loading="lazy" />}
+                            <div className="plan-meal-body">
+                              <a className="plan-meal-title" href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
+                              {s.recipe.partial && <span className="muted small"> (partial)</span>}
+                              <span className="plan-caption muted">video preview, not a dish photo</span>
+                              {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="plan-caption muted">side dish - {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
+                              {s.recipe.nutrition && s.recipe.nutrition.eligible && s.recipe.nutrition_per_portion ? (
+                                <span className="plan-nutrition">
+                                  <span className="plan-nutrition-batch"><b>Whole recipe batch:</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
+                                  <span className="plan-nutrition-portion"><b>Per portion</b> ({s.recipe.portion_assumption}): ~{s.recipe.nutrition_per_portion.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition_per_portion.protein_g}g, fat {s.recipe.nutrition_per_portion.fat_g}g, carbs {s.recipe.nutrition_per_portion.carb_g}g, fibre {s.recipe.nutrition_per_portion.fibre_g}g</span>
+                                  {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small"> ({s.recipe.nutrition.notes.join('; ')})</span>}
+                                  {s.recipe.nutrition.approx_used && <span className="muted small"> (includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand)</span>}
+                                </span>
+                              ) : (
+                                <span className="plan-nutrition-none">
+                                  <span className="plan-nonechip">Nutrition unavailable</span>
+                                  <details className="plan-why"><summary>why</summary>
+                                    <span className="muted">{s.recipe.nutrition && s.recipe.nutrition.ineligible_reasons && s.recipe.nutrition.ineligible_reasons.length > 0 ? s.recipe.nutrition.ineligible_reasons[0] : 'source is missing critical quantities'}</span>
+                                  </details>
+                                </span>
+                              )}
+                              {s.recipe.ingredients && s.recipe.ingredients.length > 0 && (
+                                <details className="plan-ing"><summary>Ingredients (as stated in source)</summary>
+                                  <ul>{s.recipe.ingredients.map((line: string, i: number) => <li key={i}>{line}</li>)}</ul>
+                                </details>
+                              )}
+                            </div>
+                          </div>
+                        ) : <span className="muted">no extracted card for this slot yet</span>}
                         {s.video_refs.length > 0 && (
-                          <span className="plan-vref"> or see video: {s.video_refs.map((v: any, i: number) => (
-                            <a key={i} href={v.url} target="_blank" rel="noreferrer">{v.title}</a>
-                          )).reduce((prev: any, curr: any) => [prev, ', ', curr])} <span className="muted">(reference only - not extracted)</span></span>
+                          <details className="plan-alts"><summary>Alternatives ({s.video_refs.length}) <span className="muted">- reference only, not extracted</span></summary>
+                            {s.video_refs.map((v: any, i: number) => (
+                              <a key={i} className="plan-alt" href={v.url} target="_blank" rel="noreferrer">{v.title}</a>
+                            ))}
+                          </details>
                         )}
                       </li>
                     ))}
