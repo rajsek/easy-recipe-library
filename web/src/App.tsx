@@ -100,7 +100,9 @@ function thumb(url: string): string {
   return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
 }
 
-function ShareCalc({ n }: { n: { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number } }) {
+interface ShareNut { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number;
+  minerals?: { ca_mg: number; fe_mg: number; mg_mg: number; k_mg: number; zn_mg: number } | null; sodium_mg?: number | null }
+function ShareCalc({ n }: { n: ShareNut }) {
   const [f, setF] = useState<number>(0);
   const chips: [number, string][] = [[2, '1/2'], [3, '1/3'], [4, '1/4'], [6, '1/6']];
   const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -113,8 +115,21 @@ function ShareCalc({ n }: { n: { kcal: number; protein_g: number; fat_g: number;
           <button key={d} type="button" className={'sharechip' + (f === d ? ' on' : '')} onClick={() => setF(d)}>{l}</button>
         ))}</span>
         {f > 0 && <span className="plan-share-out">1/{f} of batch: ~{Math.round(n.kcal / f).toLocaleString()} kcal - protein {r1(n.protein_g / f)}g, fat {r1(n.fat_g / f)}g, carbs {r1(n.carb_g / f)}g, fibre {r1(n.fibre_g / f)}g</span>}
+        {f > 0 && n.minerals && <span className="plan-share-out">1/{f} minerals: calcium {Math.round(n.minerals.ca_mg / f)}mg, iron {r1(n.minerals.fe_mg / f)}mg, magnesium {Math.round(n.minerals.mg_mg / f)}mg, potassium {Math.round(n.minerals.k_mg / f)}mg, zinc {r1(n.minerals.zn_mg / f)}mg{n.sodium_mg != null ? `, sodium ${Math.round(n.sodium_mg / f)}mg` : ''} (same raw-ingredient estimate, divided)</span>}
       </div>
     </details>
+  );
+}
+
+function MineralLine({ n }: { n: ShareNut & { sodium_note?: string; micro_gaps?: string[] } }) {
+  if (!n.minerals) return null;
+  return (
+    <span className="plan-minerals muted small">
+      <b>Minerals (whole batch, ingredient-sum estimate - raw ingredients, cooking/leaching losses not modeled):</b> calcium {n.minerals.ca_mg}mg, iron {n.minerals.fe_mg}mg, magnesium {n.minerals.mg_mg}mg, potassium {n.minerals.k_mg}mg, zinc {n.minerals.zn_mg}mg
+      {n.sodium_mg != null ? <>, sodium {n.sodium_mg}mg</> : null}.
+      {' '}{n.sodium_note}. Vitamins: unavailable (cooking retention evidence insufficient).
+      {n.micro_gaps && n.micro_gaps.length > 0 ? ` Excludes ${n.micro_gaps.map(g => g.replace(/_/g, ' ')).join(', ')} - no USDA micro data.` : ''}
+    </span>
   );
 }
 
@@ -1020,7 +1035,8 @@ export default function App() {
                               {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="plan-caption muted">side dish - {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
                               {s.recipe.nutrition && s.recipe.nutrition.eligible ? (
                                 <span className="plan-nutrition">
-                                  <span className="plan-nutrition-batch"><b>Whole recipe batch:</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
+                                  <span className="plan-nutrition-batch"><b>Whole recipe batch (ingredient-sum estimate - raw ingredients, cooking/leaching losses not modeled):</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
+                                  <MineralLine n={s.recipe.nutrition} />
                                   {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small"> ({s.recipe.nutrition.notes.join('; ')})</span>}
                                   {s.recipe.nutrition.approx_used && <span className="muted small"> (includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand)</span>}
                                   <ShareCalc n={s.recipe.nutrition} />

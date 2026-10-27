@@ -120,3 +120,49 @@ test('estimateNutrition rejects cup-quantified dals whose cup weight is borrowed
   const g = estimateNutrition('150g urad dal, 200g tomato');
   assert.equal(g.eligible, true, g.ineligible_reasons.join(' | '));
 });
+
+test('minerals are raw-ingredient sums for matched foods with USDA micro data', () => {
+  const e = estimateNutrition('200g paneer, 2 onions, 1 tbsp oil, 100g tomato');
+  assert.equal(e.eligible, true, e.ineligible_reasons.join(' | '));
+  assert.ok(e.minerals, 'minerals present');
+  assert.ok(e.minerals!.ca_mg > 0 && e.minerals!.k_mg > 0 && e.minerals!.zn_mg > 0, JSON.stringify(e.minerals));
+  // paneer is calcium-dense (USDA FDC 2705740, 483mg/100g): 200g alone contributes ~966mg
+  assert.ok(e.minerals!.ca_mg >= 900, `ca ${e.minerals!.ca_mg}`);
+});
+
+test('sodium is shown only when the source quantifies salt', () => {
+  const withSalt = estimateNutrition('200g paneer, 100g tomato, 1 tbsp oil, 1 tsp salt');
+  assert.equal(withSalt.eligible, true, withSalt.ineligible_reasons.join(' | '));
+  // 1 tsp salt = 6g x 388mg/g = 2328mg + ingredient sodium
+  assert.ok(withSalt.sodium_mg !== null && withSalt.sodium_mg >= 2328, `sodium ${withSalt.sodium_mg}`);
+  const noSalt = estimateNutrition('200g paneer, 100g tomato, 1 tbsp oil');
+  assert.equal(noSalt.eligible, true, noSalt.ineligible_reasons.join(' | '));
+  assert.equal(noSalt.sodium_mg, null);
+  assert.match(noSalt.sodium_note, /withheld/i);
+  const vague = estimateNutrition('200g paneer, 100g tomato, 1 tbsp oil, salt to taste');
+  assert.equal(vague.sodium_mg, null);
+  assert.match(vague.sodium_note, /without a quantity/i);
+  const gramSalt = estimateNutrition('200g paneer, 100g tomato, 1 tbsp oil, 6g salt');
+  assert.ok(gramSalt.sodium_mg !== null && gramSalt.sodium_mg >= 2328, `sodium ${gramSalt.sodium_mg}`);
+});
+
+test('salt does not break the eligibility gate or macros', () => {
+  const e = estimateNutrition('200g paneer, 2 onions, 1 tbsp oil, 100g tomato, 1 tsp salt');
+  assert.equal(e.eligible, true, e.ineligible_reasons.join(' | '));
+  assert.ok(e.kcal > 750 && e.kcal < 860, `kcal ${e.kcal}`); // same as salt-free
+  const f = estimateNutrition('200g paneer, 2 onions, 1 tbsp oil, 100g tomato, salt to taste');
+  assert.equal(f.eligible, true, f.ineligible_reasons.join(' | '));
+});
+
+test('foods without USDA micro data are excluded from sums and noted', () => {
+  const e = estimateNutrition('50g jaggery, 200g paneer');
+  assert.equal(e.eligible, true, e.ineligible_reasons.join(' | '));
+  assert.ok(e.minerals, 'minerals still present from paneer');
+  assert.ok(e.micro_gaps.includes('jaggery_cane'), JSON.stringify(e.micro_gaps));
+});
+
+test('unmatched cards have no minerals and withheld sodium', () => {
+  const e = estimateNutrition('QUANTITY UNSPECIFIED IN SOURCE - paneer, onion');
+  assert.equal(e.minerals, null);
+  assert.equal(e.sodium_mg, null);
+});

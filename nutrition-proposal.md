@@ -7,31 +7,38 @@ main veg) is unresolved (no-qty / no-ref / no-density) and no deep-frying oil
 was excluded. Recipe-optional ingredients and method notes do not gate.
 Coverage % is reported internally but never used as the gate.
 
-## Result
-- 28 of 84 cards eligible (whole-batch macros + fibre, verified math).
-- 56 ineligible: dominant causes are TRUE source gaps - unquantified oil/ghee/
-  butter in source (16 cards), excluded deep-frying oil (14 cards), unquantified
-  main ingredients (eggs, paneer, bread, rice), unsourced densities (poha cup,
-  grated paneer cup, cashew paste dilution, "bowl" units), ambiguous sources
-  (Kurkure 200g-vs-400g paneer contradiction).
-- Of the 28 eligible: 7 carry proxy limitations (curd-from-milk, soya-chunks-from-
-  defatted-soy-flour), 23 use >=1 approximated entry (oil, butter, sugar, curd).
+## Result (current, verified against live data)
+- 9 of 84 cards eligible (stricter proxy gate: portion weights or entries borrowed
+  from a different food make a card ineligible - e.g. cup-quantified dal whose cup
+  weight comes from lentils). Numbers shown as WHOLE-BATCH totals only; a
+  user-selected "Share of batch" calculator (1/2, 1/3, 1/4, 1/6) divides those
+  same totals as labeled arithmetic, never a serving recommendation. No recipe
+  yield is recorded; the UI says "Source yield hasn't been recorded".
+- 75 ineligible: dominant causes are TRUE source gaps - unquantified oil/ghee/
+  butter in source, excluded deep-frying oil, unquantified main ingredients,
+  unsourced densities (poha cup, "bowl" units), ambiguous sources.
 - Volume normalization: cards whose source declares a 250 ml metric cup get USDA
   240 ml cup weights scaled x1.042 (logged per card).
 
-## Presentation (per eligible card)
-Whole-batch: kcal, protein, fat, carbs, fibre + visible portion_assumption
-("whole recipe treated as N portions - assumption, not a stated yield") +
-per-portion split of those same numbers + inline disclosures where they apply:
-"curd estimated from milk", "soya chunks estimated from defatted soy flour",
-"cup weights normalized to the source's 250 ml cup".
-Micros: NOT presented anywhere - the reference table carries no verified
-micronutrients; exact micros would be unsafe.
-Ineligible cards: no numbers; composition + ingredients + portion pairing only
-(current UI behaviour). Internal audit trail (skipped fragments + reasons) kept
-per card for future closure.
+## Minerals (bounded subset, shipped)
+- Five minerals per eligible card (calcium, iron, magnesium, potassium, zinc) as
+  RAW-INGREDIENT SUMS from USDA FDC per-100g values, labeled in the UI as an
+  ingredient-sum estimate with cooking/leaching losses not modeled.
+- Provenance: 34 of 71 reference entries carry micros, each with a micro_source
+  field naming the exact USDA FDC id, data type (SR Legacy / FNDDS) and food.
+  Every matched ingredient on the 9 eligible cards is covered except jaggery
+  (Sambar Sadam): no USDA FDC entry for cane jaggery exists, so the card notes
+  its exclusion instead of estimating. Curry leaves are quantity-negligible and
+  never enter the sums.
+- Sodium is shown ONLY when the source quantifies its salt (e.g. "1 tsp salt" ->
+  6 g at USDA FDC 173468 portions, 38800 mg Na/100 g + ingredient sodium). Cards
+  whose source has no quantified salt (Navratan Pulao, Sambar Sadam) withhold
+  sodium entirely rather than estimate; the UI says why.
+- Vitamins: not estimated anywhere - cooking retention evidence is insufficient,
+  the UI says "Vitamins: unavailable (cooking retention evidence insufficient)".
 
 ## What this does NOT do
-No personal calorie targets, no diet filtering (blocked on user's audience/
+No personal adequacy or %daily-target claims, no measured-cooked-nutrition
+claims, no estimated salt, no diet filtering (blocked on user's audience/
 allergy answers), no health claims. Meal-plan compositions remain usable for
 all 84 cards via defined transparent portions.

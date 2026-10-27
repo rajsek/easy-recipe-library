@@ -11,7 +11,9 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-export interface RefEntry { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number; approx?: boolean; note?: string; }
+export interface RefEntry { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number; approx?: boolean; note?: string;
+  ca_mg?: number; fe_mg?: number; mg_mg?: number; k_mg?: number; zn_mg?: number; na_mg?: number; micro_source?: string; }
+export interface MineralSet { ca_mg: number; fe_mg: number; mg_mg: number; k_mg: number; zn_mg: number; }
 export interface NutritionEstimate {
   kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number;
   coverage_pct: number; approx_used: boolean; unavailable: boolean;
@@ -20,6 +22,13 @@ export interface NutritionEstimate {
   proxies: string[]; // ref entries used that stand in for a different food (limitation)
   eligible: boolean; // safe to show as numbers: no critical ingredient unresolved, no proxy stand-ins
   ineligible_reasons: string[];
+  // Minerals are RAW-INGREDIENT SUMS from USDA FDC per-100g values: an
+  // ingredient-sum estimate, not measured cooked nutrition. Cooking/leaching
+  // losses are not modeled. Vitamins are not estimated at all.
+  minerals: MineralSet | null;
+  micro_gaps: string[];    // matched foods with no USDA micro entry - excluded from the sums
+  sodium_mg: number | null; // shown ONLY when the source quantifies salt; never estimated
+  sodium_note: string;
 }
 export interface PlanCard {
   name: string; url: string; channel: string; diet: string; meal: string; partial: boolean;
@@ -138,12 +147,16 @@ function refKeyFor(text: string): string | null {
 /** Estimate one recipe card's WHOLE-RECIPE nutrition from stated ingredient
  *  quantities. Grams math only; no invented precision, no invented yield. */
 export function estimateNutrition(ingredients: string, _servings?: number): NutritionEstimate {
-  const zero: NutritionEstimate = { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fibre_g: 0, coverage_pct: 0, approx_used: false, unavailable: true, skipped: [], notes: [], proxies: [], eligible: false, ineligible_reasons: ['no estimate possible - quantities unspecified in source'] };
+  const zero: NutritionEstimate = { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fibre_g: 0, coverage_pct: 0, approx_used: false, unavailable: true, skipped: [], notes: [], proxies: [], eligible: false, ineligible_reasons: ['no estimate possible - quantities unspecified in source'], minerals: null, micro_gaps: [], sodium_mg: null, sodium_note: 'sodium withheld - salt not quantified in source' };
   if (!ingredients || /QUANTITY UNSPECIFIED/i.test(ingredients) && !/\d/.test(ingredients)) return zero;
   let kcal = 0, p = 0, f = 0, c = 0, fib = 0, matchedG = 0, parsedG = 0, approx = false;
+  let ca = 0, fe = 0, mg = 0, kPot = 0, zn = 0, na = 0, microMatched = false, saltG = 0, saltUnquantified = false;
+  const microGaps = new Set<string>();
   const skipped: string[] = [];
   const notes: string[] = [];
   const proxies = new Set<string>();
+  // USDA FDC 173468 (Salt, table): 38800 mg sodium per 100 g; portions tsp=6 g, tbsp=18 g, dash=0.4 g
+  const SALT_NA_PER_G = 38800 / 100;
   const metricCup = /250\s*ml\s*cup/i.test(ingredients); // source declares a 250 ml metric cup
   const REVERSE = /^(.+?)\s*[-\u2013]\s*((?:\d+\s+)?\d+\/\d+|\d+(?:\.\d+)?)\s*(k?g|ml|l|litre?s?|cups?|tsp|tbsp|tablespoons?|teaspoons?)\.?\s*$/i;
   for (const frag0 of ingredients.split(/[,\n;]| \+ |\.\s+| and (?=\d|~|a\s+(?:cup|tsp|tbsp|handful|pinch|few|little))/i)) {
@@ -180,6 +193,18 @@ export function estimateNutrition(ingredients: string, _servings?: number): Nutr
     }
     if (/TO-CONFIRM/i.test(frag)) continue;
     const stripped = frag.replace(new RegExp('^\\s*' + NUM.source + '\\s*(kg|g|gm|gms|ml|l|ltr|tsp|tbsp|tablespoons?|teaspoons?|cups?|pinch|sprigs?|handful)?\\s*', 'i'), '');
+    if (/^\s*salt\b/i.test(stripped)) {
+      const sm = frag.match(NUM);
+      if (sm) {
+        const sq = parseFloat(sm[1].split('-')[0]);
+        const srest = frag.slice((sm.index || 0) + sm[1].length);
+        if (/^\s*tbsp|tablespoons?/i.test(srest)) saltG += sq * 18;
+        else if (/^\s*(tsp|teaspoons?|dash)/i.test(srest)) saltG += sq * (/dash/i.test(srest) ? 0.4 : 6);
+        else if (/^\s*(kg|g|gm|gms)\b/i.test(srest)) saltG += sq * (/kg/i.test(srest) ? 1000 : 1);
+        else saltUnquantified = true;
+      } else saltUnquantified = true;
+      continue; // salt contributes no macros; sodium handled below
+    }
     if (NEGLIGIBLE.test(stripped) || /\bwater\b/i.test(stripped) && !refKeyFor(stripped)) continue;
     const m = frag.match(NUM);
     if (!m) { if (!NEGLIGIBLE.test(frag) && !/\bwater\b/i.test(frag)) skipped.push('no-qty: ' + frag0.trim()); continue; }
@@ -222,6 +247,11 @@ export function estimateNutrition(ingredients: string, _servings?: number): Nutr
     if ((e as any).proxy) proxies.add(key);
     const s = grams / 100;
     kcal += e.kcal * s; p += e.protein_g * s; f += e.fat_g * s; c += e.carb_g * s; fib += e.fibre_g * s;
+    if (e.ca_mg !== undefined) {
+      microMatched = true;
+      ca += (e.ca_mg || 0) * s; fe += (e.fe_mg || 0) * s; mg += (e.mg_mg || 0) * s;
+      kPot += (e.k_mg || 0) * s; zn += (e.zn_mg || 0) * s; na += (e.na_mg || 0) * s;
+    } else microGaps.add(key);
     matchedG += grams;
   }
   if (matchedG === 0) return zero;
@@ -239,12 +269,23 @@ export function estimateNutrition(ingredients: string, _servings?: number): Nutr
       ineligible.push(`source is missing a critical quantity (${reason.replace('no-', 'no ')}): ${frag.slice(0, 80)}`);
   }
   for (const px of proxies) ineligible.push(`estimated stand-in used for ${px.replace(/_/g, ' ')} - not the same food, so exact numbers are withheld`);
+  // Sodium is shown only when the source quantifies the salt it contains;
+  // without a grounded salt quantity total sodium is unknowable (salt dominates
+  // a cooked dish's sodium), so it is withheld rather than estimated.
+  const sodiumKnown = saltG > 0 && !saltUnquantified;
+  const sodiumNote = sodiumKnown
+    ? 'includes quantified salt + ingredient sodium (raw values)'
+    : saltUnquantified ? 'sodium withheld - source mentions salt without a quantity' : 'sodium withheld - no salt quantified in source';
   return {
     eligible: ineligible.length === 0, ineligible_reasons: ineligible,
     kcal: Math.round(kcal), protein_g: Math.round(p * 10) / 10, fat_g: Math.round(f * 10) / 10,
     carb_g: Math.round(c * 10) / 10, fibre_g: Math.round(fib * 10) / 10,
     coverage_pct: parsedG ? Math.round(matchedG / parsedG * 100) : 100, approx_used: approx, unavailable: false,
     skipped, notes, proxies: [...proxies],
+    minerals: microMatched ? { ca_mg: Math.round(ca), fe_mg: Math.round(fe * 10) / 10, mg_mg: Math.round(mg), k_mg: Math.round(kPot), zn_mg: Math.round(zn * 10) / 10 } : null,
+    micro_gaps: [...microGaps],
+    sodium_mg: sodiumKnown ? Math.round(na + saltG * SALT_NA_PER_G) : null,
+    sodium_note: sodiumNote,
   };
 }
 

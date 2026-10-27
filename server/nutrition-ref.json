@@ -8,7 +8,14 @@
   "cup_g": 185,
   "portion_source": "USDA SR Legacy portion data",
   "tbsp_g": 11.56,
-  "tsp_g": 3.85
+  "tsp_g": 3.85,
+  "fe_mg": 0.8,
+  "mg_mg": 25.0,
+  "na_mg": 5.0,
+  "ca_mg": 28.0,
+  "k_mg": 115,
+  "zn_mg": 1.09,
+  "micro_source": "USDA FDC 169756 (SR Legacy): Rice, white, long-grain, regular, raw, unenriched"
  },
  "bengal_gram_dal": {
   "kcal": 329,
@@ -41,7 +48,14 @@
   "protein_g": 0.76,
   "fat_g": 0.25,
   "carb_g": 3.2,
-  "fibre_g": 1.58
+  "fibre_g": 1.58,
+  "ca_mg": 10.0,
+  "k_mg": 237,
+  "zn_mg": 0.17,
+  "fe_mg": 0.27,
+  "mg_mg": 11.0,
+  "na_mg": 5.0,
+  "micro_source": "USDA FDC 170457 (SR Legacy): Tomatoes, red, ripe, raw, year round average"
  },
  "onion_big": {
   "kcal": 48,
@@ -51,21 +65,42 @@
   "fibre_g": 2.45,
   "cup_g": 160,
   "tbsp_g": 10.0,
-  "tsp_g": 3.33
+  "tsp_g": 3.33,
+  "ca_mg": 23.0,
+  "k_mg": 146,
+  "zn_mg": 0.17,
+  "fe_mg": 0.21,
+  "mg_mg": 10.0,
+  "na_mg": 4.0,
+  "micro_source": "USDA FDC 170000 (SR Legacy): Onions, raw"
  },
  "potato": {
   "kcal": 70,
   "protein_g": 1.54,
   "fat_g": 0.23,
   "carb_g": 14.89,
-  "fibre_g": 1.71
+  "fibre_g": 1.71,
+  "ca_mg": 12.0,
+  "mg_mg": 23.0,
+  "na_mg": 6.0,
+  "fe_mg": 0.81,
+  "k_mg": 425,
+  "zn_mg": 0.3,
+  "micro_source": "USDA FDC 170026 (SR Legacy): Potatoes, flesh and skin, raw"
  },
  "capsicum": {
   "kcal": 16,
   "protein_g": 1.11,
   "fat_g": 0.34,
   "carb_g": 1.84,
-  "fibre_g": 2.06
+  "fibre_g": 2.06,
+  "ca_mg": 10.0,
+  "k_mg": 175,
+  "zn_mg": 0.13,
+  "fe_mg": 0.34,
+  "mg_mg": 10.0,
+  "na_mg": 3.0,
+  "micro_source": "USDA FDC 170427 (SR Legacy): Peppers, sweet, green, raw"
  },
  "carrot": {
   "kcal": 33,
@@ -75,14 +110,28 @@
   "fibre_g": 4.18,
   "cup_g": 110,
   "tbsp_g": 6.88,
-  "tsp_g": 2.29
+  "tsp_g": 2.29,
+  "ca_mg": 36,
+  "fe_mg": 0.12,
+  "mg_mg": 12,
+  "k_mg": 258,
+  "na_mg": 75,
+  "zn_mg": 0.2,
+  "micro_source": "USDA FDC 2709660 (Survey (FNDDS)): Carrots, raw"
  },
  "french_beans": {
   "kcal": 24,
   "protein_g": 2.49,
   "fat_g": 0.26,
   "carb_g": 2.68,
-  "fibre_g": 4.38
+  "fibre_g": 4.38,
+  "ca_mg": 37.0,
+  "k_mg": 211,
+  "zn_mg": 0.24,
+  "fe_mg": 1.03,
+  "mg_mg": 25.0,
+  "na_mg": 6.0,
+  "micro_source": "USDA FDC 169961 (SR Legacy): Beans, snap, green, raw"
  },
  "cauliflower": {
   "kcal": 43,
@@ -92,7 +141,14 @@
   "fibre_g": 5.6,
   "cup_g": 107,
   "tbsp_g": 6.69,
-  "tsp_g": 2.23
+  "tsp_g": 2.23,
+  "fe_mg": 0.42,
+  "mg_mg": 15.0,
+  "na_mg": 30.0,
+  "ca_mg": 22.0,
+  "k_mg": 299,
+  "zn_mg": 0.27,
+  "micro_source": "USDA FDC 169986 (SR Legacy): Cauliflower, raw"
  },
  "coriander_leaves": {
   "kcal": 31,
@@ -103,7 +159,14 @@
   "tsp_g": 0.6,
   "tbsp_g": 1.8,
   "note_extra": "dried-leaf weight; fresh leaves weigh more per spoon",
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 67.0,
+  "zn_mg": 0.5,
+  "fe_mg": 1.77,
+  "mg_mg": 26.0,
+  "na_mg": 46.0,
+  "k_mg": 521,
+  "micro_source": "USDA FDC 169997 (SR Legacy): Coriander (cilantro) leaves, raw"
  },
  "curry_leaves": {
   "kcal": 64,
@@ -117,14 +180,28 @@
   "protein_g": 2.22,
   "fat_g": 0.85,
   "carb_g": 8.97,
-  "fibre_g": 5.36
+  "fibre_g": 5.36,
+  "ca_mg": 16.0,
+  "k_mg": 415,
+  "zn_mg": 0.34,
+  "fe_mg": 0.6,
+  "mg_mg": 43.0,
+  "na_mg": 13.0,
+  "micro_source": "USDA FDC 169231 (SR Legacy): Ginger root, raw"
  },
  "garlic": {
   "kcal": 124,
   "protein_g": 6.92,
   "fat_g": 0.16,
   "carb_g": 21.93,
-  "fibre_g": 5.22
+  "fibre_g": 5.22,
+  "fe_mg": 1.7,
+  "mg_mg": 25.0,
+  "na_mg": 17.0,
+  "ca_mg": 181,
+  "k_mg": 401,
+  "zn_mg": 1.16,
+  "micro_source": "USDA FDC 169230 (SR Legacy): Garlic, raw"
  },
  "turmeric_powder": {
   "kcal": 281,
@@ -134,7 +211,14 @@
   "fibre_g": 21.38,
   "tsp_g": 3.0,
   "tbsp_g": 9.4,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 168,
+  "k_mg": 2080.0,
+  "zn_mg": 4.5,
+  "fe_mg": 55.0,
+  "mg_mg": 208,
+  "na_mg": 27.0,
+  "micro_source": "USDA FDC 172231 (SR Legacy): Spices, turmeric, ground"
  },
  "cumin_seed": {
   "kcal": 304,
@@ -144,14 +228,28 @@
   "fibre_g": 30.35,
   "tsp_g": 2.1,
   "tbsp_g": 6.0,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "fe_mg": 66.4,
+  "mg_mg": 366,
+  "na_mg": 168,
+  "ca_mg": 931,
+  "k_mg": 1790.0,
+  "zn_mg": 4.8,
+  "micro_source": "USDA FDC 170923 (SR Legacy): Spices, cumin seed"
  },
  "tamarind_pulp": {
   "kcal": 71,
   "protein_g": 5.84,
   "fat_g": 0.49,
   "carb_g": 10.04,
-  "fibre_g": 10.7
+  "fibre_g": 10.7,
+  "zn_mg": 0.1,
+  "fe_mg": 2.8,
+  "mg_mg": 92.0,
+  "na_mg": 28.0,
+  "ca_mg": 74.0,
+  "k_mg": 628,
+  "micro_source": "USDA FDC 167763 (SR Legacy): Tamarinds, raw"
  },
  "jaggery_cane": {
   "kcal": 0,
@@ -165,7 +263,14 @@
   "protein_g": 18.86,
   "fat_g": 24.78,
   "carb_g": 2.41,
-  "fibre_g": 0
+  "fibre_g": 0,
+  "ca_mg": 597,
+  "fe_mg": 0,
+  "mg_mg": 58,
+  "k_mg": 728,
+  "na_mg": 185,
+  "zn_mg": 2.04,
+  "micro_source": "USDA FDC 2705740 (Survey (FNDDS)): Cheese, paneer"
  },
  "milk_cow": {
   "kcal": 73,
@@ -176,7 +281,14 @@
   "cup_g": 244,
   "tbsp_g": 15.3,
   "portion_source": "USDA SR Legacy portion data",
-  "tsp_g": 5.1
+  "tsp_g": 5.1,
+  "fe_mg": 0.03,
+  "mg_mg": 10.0,
+  "na_mg": 43.0,
+  "ca_mg": 113,
+  "k_mg": 132,
+  "zn_mg": 0.37,
+  "micro_source": "USDA FDC 171265 (SR Legacy): Milk, whole, 3.25% milkfat, with added vitamin D"
  },
  "milk_buffalo": {
   "kcal": 107,
@@ -246,7 +358,14 @@
   "cup_g": 218,
   "tbsp_g": 13.6,
   "tsp_g": 4.5,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "fe_mg": 0.03,
+  "mg_mg": 0.0,
+  "na_mg": 0.0,
+  "ca_mg": 0.0,
+  "k_mg": 0.0,
+  "zn_mg": 0.0,
+  "micro_source": "USDA FDC 172357 (SR Legacy): Oil, industrial, mid-oleic, sunflower"
  },
  "curd": {
   "kcal": 73,
@@ -286,7 +405,14 @@
   "portion_source": "USDA SR Legacy portion data",
   "tbsp_g": 12.0,
   "tsp_g": 4.0,
-  "portion_proxy": true
+  "portion_proxy": true,
+  "fe_mg": 5.23,
+  "mg_mg": 183,
+  "na_mg": 17.0,
+  "ca_mg": 130,
+  "k_mg": 1390.0,
+  "zn_mg": 2.76,
+  "micro_source": "USDA FDC 172436 (SR Legacy): Pigeon peas (red gram), mature seeds, raw"
  },
  "black_pepper": {
   "kcal": 217,
@@ -296,7 +422,14 @@
   "fibre_g": 33.16,
   "tsp_g": 2.3,
   "tbsp_g": 6.9,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 443,
+  "k_mg": 1330.0,
+  "zn_mg": 1.19,
+  "fe_mg": 9.71,
+  "mg_mg": 171,
+  "na_mg": 20.0,
+  "micro_source": "USDA FDC 170931 (SR Legacy): Spices, pepper, black"
  },
  "mustard_seeds": {
   "kcal": 510,
@@ -307,7 +440,14 @@
   "tsp_g": 2.0,
   "tbsp_g": 6.3,
   "note_extra": "from mustard seed, ground",
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "fe_mg": 9.21,
+  "mg_mg": 370,
+  "na_mg": 13.0,
+  "ca_mg": 266,
+  "k_mg": 738,
+  "zn_mg": 6.08,
+  "micro_source": "USDA FDC 170929 (SR Legacy): Spices, mustard seed, ground"
  },
  "coriander_seeds": {
   "kcal": 269,
@@ -317,7 +457,14 @@
   "fibre_g": 44.81,
   "tsp_g": 1.8,
   "tbsp_g": 5.0,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 709,
+  "k_mg": 1270.0,
+  "zn_mg": 4.7,
+  "fe_mg": 16.3,
+  "mg_mg": 330,
+  "na_mg": 35.0,
+  "micro_source": "USDA FDC 170922 (SR Legacy): Spices, coriander seed"
  },
  "fenugreek_seeds": {
   "kcal": 235,
@@ -327,7 +474,14 @@
   "fibre_g": 47.55,
   "tsp_g": 3.7,
   "tbsp_g": 11.1,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 176,
+  "k_mg": 770,
+  "zn_mg": 2.5,
+  "fe_mg": 33.5,
+  "mg_mg": 191,
+  "na_mg": 67.0,
+  "micro_source": "USDA FDC 171324 (SR Legacy): Spices, fenugreek seed"
  },
  "cloves": {
   "kcal": 187,
@@ -337,7 +491,14 @@
   "fibre_g": 34.52,
   "tsp_g": 2.1,
   "tbsp_g": 6.5,
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 632,
+  "k_mg": 1020.0,
+  "zn_mg": 2.32,
+  "fe_mg": 11.8,
+  "mg_mg": 259,
+  "na_mg": 277,
+  "micro_source": "USDA FDC 171321 (SR Legacy): Spices, cloves, ground"
  },
  "cardamom_green": {
   "kcal": 255,
@@ -354,7 +515,14 @@
   "protein_g": 2.36,
   "fat_g": 0.72,
   "carb_g": 5.86,
-  "fibre_g": 4.77
+  "fibre_g": 4.77,
+  "ca_mg": 18.0,
+  "k_mg": 340,
+  "zn_mg": 0.3,
+  "fe_mg": 1.2,
+  "mg_mg": 25.0,
+  "na_mg": 7.0,
+  "micro_source": "USDA FDC 170497 (SR Legacy): Peppers, hot chili, green, raw"
  },
  "button_mushroom": {
   "kcal": 27,
@@ -393,7 +561,14 @@
   "cup_g": 120,
   "portion_source": "USDA SR Legacy portion data",
   "tbsp_g": 7.5,
-  "tsp_g": 2.5
+  "tsp_g": 2.5,
+  "ca_mg": 33,
+  "fe_mg": 3.71,
+  "mg_mg": 117,
+  "k_mg": 394,
+  "zn_mg": 3.0,
+  "na_mg": 2.96,
+  "micro_source": "USDA FDC 168944 (SR Legacy): Wheat flour, whole-grain, soft wheat"
  },
  "egg_chicken_whole_raw": {
   "kcal": 135,
@@ -411,7 +586,14 @@
   "tsp_g": 2.7,
   "tbsp_g": 8.0,
   "note_extra": "tsp/tbsp from Spices, chili powder (ground form)",
-  "portion_source": "USDA SR Legacy portion data"
+  "portion_source": "USDA SR Legacy portion data",
+  "ca_mg": 148,
+  "k_mg": 2010.0,
+  "na_mg": 30.0,
+  "fe_mg": 7.8,
+  "mg_mg": 152,
+  "zn_mg": 2.48,
+  "micro_source": "USDA FDC 170932 (SR Legacy): Spices, pepper, red or cayenne"
  },
  "butter": {
   "kcal": 717,
@@ -436,7 +618,14 @@
   "cup_g": 200,
   "tsp_g": 4.2,
   "portion_source": "USDA SR Legacy portion data",
-  "tbsp_g": 12.5
+  "tbsp_g": 12.5,
+  "ca_mg": 1,
+  "fe_mg": 0.05,
+  "mg_mg": 0,
+  "k_mg": 2,
+  "zn_mg": 0.01,
+  "na_mg": 1,
+  "micro_source": "USDA FDC 169655 (SR Legacy): Sugars, granulated"
  },
  "jowar": {
   "kcal": 334,
@@ -454,7 +643,14 @@
   "cup_g": 145,
   "portion_source": "USDA SR Legacy portion data",
   "tbsp_g": 9.06,
-  "tsp_g": 3.02
+  "tsp_g": 3.02,
+  "zn_mg": 0.37,
+  "ca_mg": 64.0,
+  "fe_mg": 0.98,
+  "na_mg": 24.0,
+  "k_mg": 746,
+  "mg_mg": 35.0,
+  "micro_source": "USDA FDC 168164 (SR Legacy): Raisins, golden, seedless"
  },
  "peanut_groundnut": {
   "kcal": 520,
@@ -465,7 +661,14 @@
   "cup_g": 146,
   "portion_source": "USDA SR Legacy portion data",
   "tbsp_g": 9.12,
-  "tsp_g": 3.04
+  "tsp_g": 3.04,
+  "na_mg": 18.0,
+  "fe_mg": 4.58,
+  "mg_mg": 168,
+  "ca_mg": 92.0,
+  "k_mg": 705,
+  "zn_mg": 3.27,
+  "micro_source": "USDA FDC 172430 (SR Legacy): Peanuts, all types, raw"
  },
  "soy_sauce": {
   "kcal": 53,
@@ -474,7 +677,14 @@
   "carb_g": 4.93,
   "fibre_g": 0.8,
   "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
-  "usda_description": "Soy sauce made from soy and wheat (shoyu)"
+  "usda_description": "Soy sauce made from soy and wheat (shoyu)",
+  "ca_mg": 33.0,
+  "k_mg": 435,
+  "zn_mg": 0.87,
+  "fe_mg": 1.45,
+  "mg_mg": 74.0,
+  "na_mg": 5490.0,
+  "micro_source": "USDA FDC 174277 (SR Legacy): Soy sauce made from soy and wheat (shoyu)"
  },
  "ketchup": {
   "kcal": 101,
@@ -592,7 +802,14 @@
   "protein_g": 4.66,
   "fat_g": 0.65,
   "carb_g": 2.39,
-  "fibre_g": 5.89
+  "fibre_g": 5.89,
+  "ca_mg": 199,
+  "k_mg": 458,
+  "zn_mg": 1.09,
+  "fe_mg": 11.9,
+  "mg_mg": 63.0,
+  "na_mg": 30.0,
+  "micro_source": "USDA FDC 173475 (SR Legacy): Spearmint, fresh"
  },
  "sesame_gingelly_black": {
   "kcal": 508,
@@ -670,7 +887,14 @@
   "fat_g": 43.8,
   "carb_g": 30.2,
   "fibre_g": 3.3,
-  "source": "USDA SR Legacy: Nuts, cashew nuts, raw"
+  "source": "USDA SR Legacy: Nuts, cashew nuts, raw",
+  "fe_mg": 6.68,
+  "mg_mg": 292,
+  "na_mg": 12.0,
+  "ca_mg": 37.0,
+  "k_mg": 660,
+  "zn_mg": 5.78,
+  "micro_source": "USDA FDC 170162 (SR Legacy): Nuts, cashew nuts, raw"
  },
  "almond": {
   "kcal": 579,
@@ -681,7 +905,14 @@
   "cup_g": 143,
   "source": "USDA SR Legacy: Nuts, almonds",
   "tbsp_g": 8.94,
-  "tsp_g": 2.98
+  "tsp_g": 2.98,
+  "fe_mg": 3.71,
+  "mg_mg": 270,
+  "ca_mg": 269,
+  "k_mg": 733,
+  "zn_mg": 3.12,
+  "na_mg": 1.0,
+  "micro_source": "USDA FDC 170567 (SR Legacy): Nuts, almonds"
  },
  "green_peas": {
   "kcal": 81,
@@ -689,6 +920,13 @@
   "fat_g": 0.4,
   "carb_g": 14.5,
   "fibre_g": 5.7,
-  "source": "USDA SR Legacy: Peas, green, raw"
+  "source": "USDA SR Legacy: Peas, green, raw",
+  "fe_mg": 1.47,
+  "mg_mg": 33.0,
+  "na_mg": 5.0,
+  "ca_mg": 25.0,
+  "k_mg": 244,
+  "zn_mg": 1.24,
+  "micro_source": "USDA FDC 170419 (SR Legacy): Peas, green, raw"
  }
 }
