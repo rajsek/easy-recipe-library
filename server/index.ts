@@ -415,7 +415,13 @@ app.get('/api/ask/:id', async (req, res) => {
 // Built frontend (npm run build). In dev, use the Vite server instead.
 const dist = path.join(__dirname, '..', 'web', 'dist');
 app.use(express.static(dist));
-app.get('*', (_req, res, next) => {
+app.get('*', (req, res, next) => {
+  // A real file path that is not on disk (e.g. a stale cached page asking
+  // for a previous deploy's hashed bundle) must 404. Serving index.html
+  // with 200 there makes the browser try to parse HTML as a module and the
+  // app boots to a blank page - an honest 404 is what the boot watchdog and
+  // logs need to see.
+  if (req.path.startsWith('/assets/') || path.extname(req.path)) return next();
   res.sendFile(path.join(dist, 'index.html'), (err) => { if (err) next(); });
 });
 

@@ -261,3 +261,27 @@ test('plan prefs persist per profile and follow the name, not the device', async
   const anonPut = await fetch(base + '/api/prefs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prefs: { plan_lunch: '1' } }) });
   assert.equal(anonPut.status, 400, 'prefs writes also require a name');
 });
+
+test('missing hashed asset 404s instead of receiving index.html', async () => {
+  const r = await realFetch(base + '/assets/index-definitelymissing0.js');
+  assert.equal(r.status, 404, 'stale bundle request must not be answered with HTML');
+});
+
+test('unknown file path with extension 404s', async () => {
+  const r = await realFetch(base + '/no-such-file.png');
+  assert.equal(r.status, 404);
+});
+
+test('SPA routes still serve index.html', async () => {
+  const r = await realFetch(base + '/plan');
+  assert.equal(r.status, 200);
+  assert.match(String(r.headers.get('content-type')), /text\/html/);
+  const body = await r.text();
+  assert.match(body, /<div id="root">/);
+});
+
+test('index.html carries the inline boot watchdog', async () => {
+  const r = await realFetch(base + '/');
+  const body = await r.text();
+  assert.match(body, /__erlBootFail/, 'watchdog present in served HTML');
+});

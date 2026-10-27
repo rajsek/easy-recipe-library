@@ -26,6 +26,10 @@ function installAssetReloadGuard() {
 }
 installAssetReloadGuard();
 
+// Successful boot: the index.html boot watchdog's one-shot retry flag resets,
+// so a later genuine failure still gets its single hard reload.
+try { sessionStorage.removeItem('erl-boot-retry'); } catch { /* storage unavailable */ }
+
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

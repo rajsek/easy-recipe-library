@@ -7,6 +7,39 @@
 </head>
 <body>
   <div id="root"></div>
+  <script>
+  // Boot watchdog: if the bundle fails to load (e.g. this HTML was cached
+  // before a deploy and its hashed bundle no longer exists), hard-reload once
+  // to pick up the current page, then show an honest retry message.
+  (function () {
+    var KEY = 'erl-boot-retry';
+    function fallback() {
+      var root = document.getElementById('root');
+      if (root && !root.hasChildNodes()) {
+        root.innerHTML = '<div style="font-family:system-ui,-apple-system,sans-serif;padding:3rem 1.5rem;text-align:center">'
+          + '<p>The app did not finish loading.</p>'
+          + '<p><a href="/" style="color:#0b57d0">Tap to reload</a></p></div>';
+      }
+    }
+    window.__erlBootFail = function () {
+      var tried = false;
+      try { tried = sessionStorage.getItem(KEY) === '1'; sessionStorage.setItem(KEY, '1'); } catch (e) {}
+      if (!tried) location.reload(); else fallback();
+    };
+    // Capture-phase listener catches resource load failures (script/link)
+    // even though those events do not bubble.
+    window.addEventListener('error', function (e) {
+      var t = e.target;
+      if (t && (t.tagName === 'SCRIPT' || t.tagName === 'LINK')) window.__erlBootFail();
+    }, true);
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        var root = document.getElementById('root');
+        if (root && !root.hasChildNodes()) window.__erlBootFail();
+      }, 8000);
+    });
+  })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>
