@@ -5,16 +5,19 @@ import { PG_TABS, buildInsert, rowsToObjects, createPgStore } from './data-pg.js
 test('pg column lists mirror the Sheet headers exactly', () => {
   assert.deepEqual(PG_TABS.Videos.cols, ['video_id','title','channel','url','thumbnail_url','duration_s','views','category','diet_hint','yt_publish_date','date_first_added','date_last_checked','extraction_status']);
   assert.deepEqual(PG_TABS.Recipes.cols, ['recipe_name','video_url','channel','diet','meal_type','time_notes','ingredients','steps','source_note','verified','date_checked']);
-  assert.deepEqual(PG_TABS.History.cols, ['date','video_id','title','state','notes']);
-  assert.deepEqual(PG_TABS.Picks.cols, ['date','filters','note','suggested_video_ids','chosen_video_id','suggested_titles']);
-  assert.deepEqual(PG_TABS.Queue.cols, ['request_id','ts','diet','meal','note','status','answer','reserved']);
+  assert.deepEqual(PG_TABS.History.cols, ['date','video_id','title','state','notes','profile']);
+  assert.deepEqual(PG_TABS.Picks.cols, ['date','filters','note','suggested_video_ids','chosen_video_id','suggested_titles','profile']);
+  assert.deepEqual(PG_TABS.Queue.cols, ['request_id','ts','diet','meal','note','status','answer','reserved','profile']);
   assert.deepEqual(PG_TABS.RawExtracts.cols, ['video_id','title','channel_hint','yt_publish_date','description','transcript','extracted_at','parse_status']);
 });
 
-test('buildInsert parameterizes values in column order and pads short rows', () => {
-  const q = buildInsert(PG_TABS.History, ['2026-10-27', 'abc123', 'Title', 'saved']);
+test('buildInsert parameterizes in column order; unsupplied trailing columns fall to the table default', () => {
+  const q = buildInsert(PG_TABS.History, ['2026-10-27', 'abc123', 'Title', 'saved', 'app button']);
   assert.equal(q.text, 'INSERT INTO history (date, video_id, title, state, notes) VALUES ($1, $2, $3, $4, $5)');
-  assert.deepEqual(q.values, ['2026-10-27', 'abc123', 'Title', 'saved', null]);
+  assert.deepEqual(q.values, ['2026-10-27', 'abc123', 'Title', 'saved', 'app button']);
+  const full = buildInsert(PG_TABS.History, ['2026-10-27', 'abc123', 'Title', 'saved', 'app button', 'raja']);
+  assert.equal(full.text, 'INSERT INTO history (date, video_id, title, state, notes, profile) VALUES ($1, $2, $3, $4, $5, $6)');
+  assert.deepEqual(full.values[5], 'raja');
 });
 
 test('buildInsert never interpolates values into SQL text', () => {
@@ -26,9 +29,9 @@ test('buildInsert never interpolates values into SQL text', () => {
 
 test('rowsToObjects maps to header-keyed objects with null -> empty string', () => {
   const rows = rowsToObjects(PG_TABS.Picks.cols, [
-    { date: '2026-10-27', filters: '{"diet":"Veg"}', note: null, suggested_video_ids: 'a,b', chosen_video_id: 'a', suggested_titles: 'A | B' },
+    { date: '2026-10-27', filters: '{"diet":"Veg"}', note: null, suggested_video_ids: 'a,b', chosen_video_id: 'a', suggested_titles: 'A | B', profile: null },
   ]);
-  assert.deepEqual(rows, [{ date: '2026-10-27', filters: '{"diet":"Veg"}', note: '', suggested_video_ids: 'a,b', chosen_video_id: 'a', suggested_titles: 'A | B' }]);
+  assert.deepEqual(rows, [{ date: '2026-10-27', filters: '{"diet":"Veg"}', note: '', suggested_video_ids: 'a,b', chosen_video_id: 'a', suggested_titles: 'A | B', profile: '' }]);
 });
 
 test('createPgStore readTab orders by seq and appendRow uses buildInsert', async () => {
@@ -46,6 +49,9 @@ test('createPgStore readTab orders by seq and appendRow uses buildInsert', async
   await store.appendRow('Queue', ['r1', '2026-10-27T00:00:00Z', 'Veg', 'Dinner', 'note', 'pending', '', '']);
   assert.equal(calls[1].text, 'INSERT INTO queue (request_id, ts, diet, meal, note, status, answer, reserved) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)');
   assert.equal(calls[1].values[0], 'r1');
+  await store.appendRow('Queue', ['r2', '2026-10-27T00:00:00Z', 'Veg', 'Dinner', 'note', 'pending', '', '', 'amma']);
+  assert.equal(calls[2].text, 'INSERT INTO queue (request_id, ts, diet, meal, note, status, answer, reserved, profile) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)');
+  assert.equal(calls[2].values[8], 'amma');
 });
 
 test('createPgStore rejects unknown tabs', async () => {

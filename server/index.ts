@@ -17,7 +17,7 @@ import { generatePlan } from './mealplan.js';
 import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
-  addQueueRequest, getQueueRequest
+  addQueueRequest, getQueueRequest, normalizeProfile
 } from './data.js';
 import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords, typeaheadVocab, dishVocab, hasIngredientWord } from './pick.js';
 import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION, loadSemantic } from './semantic.js';
@@ -70,10 +70,18 @@ app.get('/api/state', (_req, res) => res.json({ mode, ai: !!aiProvider, aiProvid
 app.get('/api/channels', async (_req, res) => res.json(await getChannels()));
 
 app.get('/api/videos', async (req, res) => {
-  res.json(await getVideos({
+  // Proper pagination over the FULL matching set: the cap is gone. The client
+  // gets one page plus the matching total so it can render numbered pages.
+  const all = await getVideos({
     q: String(req.query.q || ''), channel: String(req.query.channel || ''),
     diet: String(req.query.diet || ''), category: String(req.query.category || ''), sort: String(req.query.sort || '')
-  }));
+  });
+  const pageSize = Math.min(Math.max(parseInt(String(req.query.page_size || '100'), 10) || 100, 25), 200);
+  const total = all.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  let page = parseInt(String(req.query.page || '1'), 10) || 1;
+  page = Math.min(Math.max(page, 1), pages); // clamp: out-of-range pages land on the nearest real page
+  res.json({ videos: all.slice((page - 1) * pageSize, page * pageSize), total, page, pages, page_size: pageSize });
 });
 
 app.get('/api/recipes', async (_req, res) => res.json(await getRecipes()));
@@ -98,24 +106,27 @@ app.get('/api/plan', async (req, res) => {
   }));
 });
 
-app.get('/api/history', async (_req, res) => {
-  const h = await getHistory();
-  res.json([...h, ...demoMemory.history]);
+app.get('/api/history', async (req, res) => {
+  const profile = normalizeProfile(req.get('x-profile'));
+  const h = await getHistory(profile);
+  const demoH = mode === 'demo' ? demoMemory.history.filter((r) => normalizeProfile(r.profile) === profile) : [];
+  res.json([...h, ...demoH]);
 });
 
 app.post('/api/history', async (req, res) => {
   try {
     const { video_id, title, state } = req.body || {};
+    const profile = normalizeProfile(req.get('x-profile'));
     if (!/^[\w-]{1,20}$/.test(String(video_id || ''))) throw new Error('bad video_id');
     if (String(title || '').length > 200) throw new Error('title too long');
     if (mode === 'demo') {
       if (!['saved-for-later', 'chosen', 'cooked', 'favourite'].includes(state)) throw new Error('bad state');
       const date = new Date().toISOString().slice(0, 10);
-      demoMemory.history.push({ date, id: video_id, title, state });
+      demoMemory.history.push({ date, id: video_id, title, state, profile });
       res.json({ ok: true, date });
       return;
     }
-    res.json(await saveHistory(String(video_id || ''), String(title || ''), String(state || '')));
+    res.json(await saveHistory(String(video_id || ''), String(title || ''), String(state || ''), profile));
   } catch (e: any) {
     res.status(400).json({ error: e.message || 'save failed' });
   }
@@ -143,10 +154,11 @@ app.post('/api/pick', async (req, res) => {
   const dishes = dishesRaw.map((d: any) => String(d || '').trim()).filter((d: string) => d.length > 0 && d.length <= 60);
   const filter = { diet, meal, dishes };
   const note = String(req.body?.note || '').slice(0, 200);
-  const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(), getPickRows()]);
+  const pickProfile = normalizeProfile(req.get('x-profile'));
+  const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(pickProfile), getPickRows(pickProfile)]);
   const ex = excludedIds(
-    mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
-    mode === 'demo' ? [...picks, ...demoPicks] : picks
+    mode === 'demo' ? [...history, ...demoMemory.history.filter((h) => normalizeProfile(h.profile) === pickProfile).map((h) => ({ ...h, video_id: h.id }))] : history,
+    mode === 'demo' ? [...picks, ...demoPicks.filter((r) => normalizeProfile(r.profile) === pickProfile)] : picks
   );
   const sink = { calls: [] as any[] };
   const { rankFn } = buildRankFn(sink);
@@ -168,7 +180,7 @@ app.post('/api/pick', async (req, res) => {
     }
   }
   const result = await pickForMe(filter, note, recipes as any, ex, rankFn, classifyFn, slimFn, seenIds);
-  await recordPick(filter, note, result.ids, result.picks.map((p) => p.name));
+  await recordPick(filter, note, result.ids, result.picks.map((p) => p.name), pickProfile);
   // Discovery fill: when fewer than 5 checked recipes qualify, offer labelled
   // full-corpus video alternatives so a thin checked pool is not a dead end.
   // These are NOT checked picks: not counted, not recorded as suggestions,
@@ -203,7 +215,7 @@ app.post('/api/ask', async (req, res) => {
   if (meal.length > 40) return res.status(400).json({ error: 'bad meal' });
   const note = String(req.body?.note || '').slice(0, 200);
   try {
-    const id = await addQueueRequest({ diet, meal, note });
+    const id = await addQueueRequest({ diet, meal, note, profile: normalizeProfile(req.get('x-profile')) });
     res.json({ request_id: id });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'could not queue the request' });
@@ -254,10 +266,11 @@ app.post('/api/ask-ai', async (req, res) => {
     // filter, then the ask route's own rules - hard "no X" exclusions, the
     // 30-day no-repeat (unless the question names the dish), and explicit
     // food words as hard requirements with an honest zero, never invention.
-    const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(), getPickRows()]);
+    const askProfile = normalizeProfile(req.get('x-profile'));
+    const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(askProfile), getPickRows(askProfile)]);
     const ex = excludedForAsk(
-      mode === 'demo' ? [...history, ...demoMemory.history.map((h) => ({ ...h, video_id: h.id }))] : history,
-      mode === 'demo' ? [...picks, ...demoPicks] : picks
+      mode === 'demo' ? [...history, ...demoMemory.history.filter((h) => normalizeProfile(h.profile) === askProfile).map((h) => ({ ...h, video_id: h.id }))] : history,
+      mode === 'demo' ? [...picks, ...demoPicks.filter((r) => normalizeProfile(r.profile) === askProfile)] : picks
     );
     // A continued request also hides what it was just shown.
     if (more && prior) for (const id of prior.lastVideoIds) ex.videoOnly[id] = true;
@@ -326,7 +339,7 @@ app.post('/api/ask-ai', async (req, res) => {
     const usage = sink.calls.reduce((a, c) => ({ prompt: a.prompt + c.prompt_tokens, completion: a.completion + c.completion_tokens, total: a.total + c.total_tokens }), { prompt: 0, completion: 0, total: 0 });
     const body = {
       answer: text,
-      recipes: cited.map((r: any) => ({ name: r.recipe_name, url: r.video_url, time: r.time_notes || '', diet: r.diet || '', meal: r.meal_type || '', reason: '' })),
+      recipes: cited.map((r: any) => ({ name: r.recipe_name, url: r.video_url, time: r.time_notes || '', duration_s: r.duration_s || '', diet: r.diet || '', meal: r.meal_type || '', reason: '' })),
       videos: (citedVideos || []).map((v: any) => ({ title: v.title, url: v.url, channel: v.channel, status: v.status })),
     };
     await askCache.put(question, sig, body);

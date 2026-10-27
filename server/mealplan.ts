@@ -170,7 +170,16 @@ export function estimateNutrition(ingredients: string, _servings?: number): Nutr
       }
     }
     if (/\b(for|to)\s+(deep[- ]?fry|frying)|deep[- ]?fry/i.test(frag) && /\b(oil|ghee)\b/i.test(frag)) { skipped.push('frying-oil: ' + frag0.trim()); continue; }
-    if (/^(washed|soaked?|soak|drained?|grind|grated|chopped|sliced|to a\b|as needed)/i.test(frag) || /enough for|pan size|for the tawa|pressure[- ]cooked|whistles?|NOT in the source ingredient|\breserved\b/i.test(frag)) { skipped.push('method-note: ' + frag0.trim()); continue; }
+    // Unquantified CONSUMED fat (tawa oil, greasing ghee) is calorie-critical:
+    // never let the method-note pattern absorb it - classify as no-qty instead.
+    const fatWord = /\b(oil|ghee|butter|cream|fat)\b/i.test(frag);
+    // Ingredients named as used-but-not-listed in the source: a critical one
+    // (sugar etc.) with unknown quantity is a completeness gap, not a note.
+    const unlisted = /NOT in the source ingredient/i.test(frag);
+    if (/^(washed|soaked?|soak|drained?|grind|grated|chopped|sliced|to a\b|as needed)/i.test(frag) || /enough for|pan size|for the tawa|pressure[- ]cooked|whistles?|NOT in the source ingredient|\breserved\b/i.test(frag)) {
+      if (fatWord || (unlisted && CRITICAL.test(frag))) { skipped.push('no-qty: ' + frag0.trim()); continue; }
+      skipped.push('method-note: ' + frag0.trim()); continue;
+    }
     if (/TO-CONFIRM/i.test(frag)) continue;
     const stripped = frag.replace(new RegExp('^\\s*' + NUM.source + '\\s*(kg|g|gm|gms|ml|l|ltr|tsp|tbsp|tablespoons?|teaspoons?|cups?|pinch|sprigs?|handful)?\\s*', 'i'), '');
     if (NEGLIGIBLE.test(stripped) || /\bwater\b/i.test(stripped) && !refKeyFor(stripped)) continue;
@@ -196,8 +205,10 @@ export function estimateNutrition(ingredients: string, _servings?: number): Nutr
       const e: any = REF[key];
       let w = unitKind === 'cup' ? e.cup_g : unitKind === 'tsp' ? e.tsp_g : e.tbsp_g;
       if (w && unitKind === 'cup' && metricCup) { w = w * 250 / 240; if (!notes.length) notes.push('source declares 250 ml cup; USDA cup weights (240 ml) scaled x1.042'); }
-      if (w) unitMul = w; // ingredient-specific, sourced portion weight
-      else unitMul = 0;   // no sourced density for this ingredient: leave unconverted
+      if (w) {
+        unitMul = w; // ingredient-specific, sourced portion weight
+        if ((e as any).portion_proxy) proxies.add(key + ' (portion weight from a different food)'); // density borrowed from another food - not exact
+      } else unitMul = 0;   // no sourced density for this ingredient: leave unconverted
     }
     if (parenG) grams = parseFloat(parenG[1]);
     else if (unitMul) grams = qty * unitMul;

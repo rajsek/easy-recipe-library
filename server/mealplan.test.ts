@@ -96,3 +96,27 @@ test('eligible card exposes whole-batch and per-portion numbers distinctly', () 
   assert.equal(r.nutrition_per_portion!.kcal, Math.round(r.nutrition.kcal / 2));
   assert.ok(/whole recipe treated as 2 portion/.test(r.portion_assumption));
 });
+
+test('estimateNutrition rejects unquantified consumed fat hidden as a method note (tawa oil)', () => {
+  // Regression: "oil for the tawa" was classified as a skippable method-note,
+  // letting a card publish batch/portion totals with uncounted consumed fat.
+  const e = estimateNutrition('1kg rice, 150g urad dal, oil for the tawa');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /oil/i.test(r)), e.ineligible_reasons.join(' | '));
+});
+
+test('estimateNutrition rejects critical items used but not in the source ingredient list', () => {
+  const e = estimateNutrition('200g paneer, 1 cup milk, cumin powder and sugar that are NOT in the source ingredient list - QUANTITIES UNSPECIFIED IN SOURCE');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /sugar|cumin/i.test(r)), e.ineligible_reasons.join(' | '));
+});
+
+test('estimateNutrition rejects cup-quantified dals whose cup weight is borrowed from a different food', () => {
+  // urad dal cup weight comes from USDA "Lentils, raw" - a different food's density.
+  const e = estimateNutrition('1 cup urad dal, 200g tomato');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /portion weight|stand-in/i.test(r)), e.ineligible_reasons.join(' | '));
+  // gram-quantified dal does not touch the borrowed cup weight and stays eligible
+  const g = estimateNutrition('150g urad dal, 200g tomato');
+  assert.equal(g.eligible, true, g.ineligible_reasons.join(' | '));
+});

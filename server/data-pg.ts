@@ -22,15 +22,18 @@ export interface PgTab { table: string; cols: string[]; }
 export const PG_TABS: Record<string, PgTab> = {
   Videos: { table: 'videos', cols: ['video_id','title','channel','url','thumbnail_url','duration_s','views','category','diet_hint','yt_publish_date','date_first_added','date_last_checked','extraction_status'] },
   Recipes: { table: 'recipes', cols: ['recipe_name','video_url','channel','diet','meal_type','time_notes','ingredients','steps','source_note','verified','date_checked'] },
-  History: { table: 'history', cols: ['date','video_id','title','state','notes'] },
-  Picks: { table: 'picks', cols: ['date','filters','note','suggested_video_ids','chosen_video_id','suggested_titles'] },
-  Queue: { table: 'queue', cols: ['request_id','ts','diet','meal','note','status','answer','reserved'] },
+  History: { table: 'history', cols: ['date','video_id','title','state','notes','profile'] },
+  Picks: { table: 'picks', cols: ['date','filters','note','suggested_video_ids','chosen_video_id','suggested_titles','profile'] },
+  Queue: { table: 'queue', cols: ['request_id','ts','diet','meal','note','status','answer','reserved','profile'] },
   RawExtracts: { table: 'rawextracts', cols: ['video_id','title','channel_hint','yt_publish_date','description','transcript','extracted_at','parse_status'] },
 };
 
-/** Pure: build a parameterized INSERT for one row (values in PG_TABS column order). */
+/** Pure: build a parameterized INSERT for one row (values in PG_TABS column
+ *  order). Trailing columns the row does not supply are omitted from the
+ *  INSERT so the table default applies (profile's NOT NULL DEFAULT '' relies
+ *  on this); interior gaps still bind null. */
 export function buildInsert(tab: PgTab, row: Array<string | null>): { text: string; values: Array<string | null> } {
-  const cols = tab.cols;
+  const cols = tab.cols.slice(0, row.length);
   const values = cols.map((_, i) => (i < row.length ? row[i] : null));
   const placeholders = cols.map((_, i) => '$' + (i + 1)).join(', ');
   const text = `INSERT INTO ${tab.table} (${cols.join(', ')}) VALUES (${placeholders})`;

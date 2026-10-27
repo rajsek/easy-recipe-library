@@ -181,3 +181,55 @@ test('dish filter: dish-only Ask works, cache separates dish selections, video a
     assert.ok(/ven/i.test(v.title) && /pongal/i.test(v.title), 'video alternative off-dish: ' + v.title);
   }
 });
+
+test('videos pagination: boundaries, clamps, counts over the full matching set', async () => {
+  const get = (qs: string) => fetch(base + '/api/videos?' + qs).then((r) => r.json());
+  const p1 = await get('page_size=25&page=1');
+  assert.equal(p1.page_size, 25);
+  assert.equal(p1.videos.length, 25);
+  assert.equal(p1.pages, Math.ceil(p1.total / 25), 'pages cover the full matching count');
+  assert.ok(p1.total > 25, 'more than one page in demo data');
+  // Last page: exact boundary, no spill, no empty page
+  const last = await get(`page_size=25&page=${p1.pages}`);
+  assert.equal(last.page, p1.pages);
+  assert.ok(last.videos.length >= 1 && last.videos.length <= 25, 'last page holds the remainder');
+  assert.equal((p1.pages - 1) * 25 + last.videos.length, p1.total, 'pages tile the full set exactly');
+  // Out-of-range pages clamp to the nearest real page instead of empty/error
+  const over = await get('page_size=25&page=99999');
+  assert.equal(over.page, p1.pages);
+  assert.equal(over.videos.length, last.videos.length);
+  const under = await get('page_size=25&page=-3');
+  assert.equal(under.page, 1);
+  assert.equal(under.videos.length, 25);
+  // page_size clamps
+  const big = await get('page_size=9999');
+  assert.equal(big.page_size, 200);
+  const small = await get('page_size=1');
+  assert.equal(small.page_size, 25);
+  // Filters shrink the total, never inflate it; filtered pages still tile
+  const f = await get('page_size=25&page=1&channel=NoSuchChannelZZZ');
+  assert.equal(f.total, 0);
+  assert.equal(f.pages, 1);
+  assert.equal(f.videos.length, 0);
+  // Stable ordering: first id of page 2 never equals any id on page 1
+  const p2 = await get('page_size=25&page=2');
+  const ids1 = new Set(p1.videos.map((v: any) => v.id));
+  assert.ok(p2.videos.every((v: any) => !ids1.has(v.id)), 'no row repeats across pages');
+});
+
+test('profile header: demo history is isolated per profile namespace', async () => {
+  const post = (profile: string, id: string) => fetch(base + '/api/history', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': profile },
+    body: JSON.stringify({ video_id: id, title: 'T', state: 'cooked' })
+  }).then((r) => r.json());
+  const getH = (profile: string) => fetch(base + '/api/history', { headers: { 'x-profile': profile } }).then((r) => r.json());
+  await post('Amma', 'profiletesta');
+  await post('Raja', 'profiletestb');
+  const amma = await getH('Amma');
+  const raja = await getH('  raja  '); // case/space variants hit the same namespace
+  const anon = await getH('');
+  assert.ok(amma.some((h: any) => h.id === 'profiletesta'), 'own row visible');
+  assert.ok(!amma.some((h: any) => h.id === 'profiletestb'), "other profile's row hidden");
+  assert.ok(raja.some((h: any) => h.id === 'profiletestb'), 'normalized name sees own row');
+  assert.ok(!anon.some((h: any) => h.id === 'profiletesta' || h.id === 'profiletestb'), 'named rows never leak into the default namespace');
+});

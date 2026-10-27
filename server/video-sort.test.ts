@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { selectVideoRows } from './data.js';
 
-test('video source sorting happens before 300 cap, not just within a truncated response', () => {
+test('video source sorting applies to the full set, no row cap', () => {
   const rows = Array.from({length:350}, (_, i) => ({video_id:String(i),title: i === 349 ? 'AAA highest' : `Other ${i}`,views:i,channel:'A',diet_hint:'veg',category:'snack'}));
   const viewed = selectVideoRows(rows, {sort:'views'});
-  assert.equal(viewed.length,300); assert.equal(viewed[0].id,'349');
+  assert.equal(viewed.length,350); assert.equal(viewed[0].id,'349');
   assert.equal(selectVideoRows(rows,{sort:'name'})[0].id,'349');
   assert.equal(selectVideoRows(rows,{sort:'unsupported'})[0].id,'0');
   assert.equal(rows[0].video_id,'0');

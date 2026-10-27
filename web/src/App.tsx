@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { taFilter, taNav, toggleSel } from './ta';
 import { sortedResults, type SortKey, type TimeBucket } from './result-sort';
 
-interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; diet: string; published: string; status: string; }
-interface Recipe { name: string; url: string; channel: string; diet: string; meal: string; time: string; ingredients: string; steps: string[]; source: string; partial: boolean; }
+interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; duration_s?: string; diet: string; published: string; status: string; }
+interface VideoPage { videos: VideoItem[]; total: number; page: number; pages: number; page_size: number; }
+interface Recipe { name: string; url: string; channel: string; diet: string; meal: string; time: string; duration_s?: string; ingredients: string; steps: string[]; source: string; partial: boolean; }
 interface HistoryEntry { date: string; id: string; title: string; state: string; }
 interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: string; interpreted?: { from: string; to: string }[]; picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[]; videos?: { video_id: string; title: string; url: string; channel: string; diet: string; status: string }[]; }
 
@@ -12,9 +13,21 @@ interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: 
 let authToken = localStorage.getItem('app_token') || '';
 let onAuthRequired: () => void = () => {};
 
+// Self-declared profile name: logical separation of history/picks/queue per
+// person on a shared device. NOT a login - the server treats it as a plain
+// label, and anyone can type any name.
+let profileName = localStorage.getItem('profile_name') || '';
+let onProfileChanged: () => void = () => {};
+function setProfileNameGlobal(name: string) {
+  profileName = name.replace(/\s+/g, ' ').trim().slice(0, 40);
+  localStorage.setItem('profile_name', profileName);
+  onProfileChanged();
+}
+
 async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
   const headers: Record<string, string> = { ...(opts.headers as any) };
   if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+  if (profileName) headers['X-Profile'] = profileName;
   const r = await fetch(url, { ...opts, headers });
   if (r.status === 401) {
     authToken = '';
@@ -31,8 +44,8 @@ function TokenGate({ onUnlock }: { onUnlock: (t: string) => void }) {
     <main className="wrap">
       <div className="tokengate">
         <h2>Locked</h2>
-        <p className="muted">This app is protected. Enter the app token (APP_TOKEN from your .env) to continue.</p>
-        <input type="password" placeholder="App token" value={v}
+        <p className="muted">This app is protected. Enter the app password to continue.</p>
+        <input type="password" placeholder="App password" value={v}
           onChange={(e) => setV(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && v.trim()) onUnlock(v.trim()); }} />
         <button className="btn primary" disabled={!v.trim()} onClick={() => onUnlock(v.trim())}>Unlock</button>
@@ -190,12 +203,22 @@ function IngredientList({ text }: { text: string }) {
   );
 }
 
-function Chips({ diet, meal, time }: { diet?: string; meal?: string; time?: string }) {
+// A stated cook time wins. When none is stated the linked video's length is
+// shown instead, always labelled so it is never mistaken for a cook time.
+function videoLenChip(durationS?: string): string {
+  const s = String(durationS || '').trim();
+  if (!/^\d+$/.test(s)) return '';
+  const m = Math.round(Number(s) / 60);
+  return m > 0 ? `Video ${m} min (length, not cook time)` : '';
+}
+
+function Chips({ diet, meal, time, durationS }: { diet?: string; meal?: string; time?: string; durationS?: string }) {
+  const fallback = time ? '' : videoLenChip(durationS);
   return (
     <div className="chips">
       {diet && <span className="chip">{diet}</span>}
       {meal && <span className="chip">{meal}</span>}
-      {time && <span className="chip">{time}</span>}
+      {time ? <span className="chip">{time}</span> : fallback ? <span className="chip">{fallback}</span> : null}
     </div>
   );
 }
@@ -210,7 +233,7 @@ function RecipeCard({ c, onSaved }: { c: Recipe; onSaved: () => void }) {
       <div className="cardbody">
         <h3>{c.name}</h3>
         <div className="muted small">{c.channel}</div>
-        <Chips diet={c.diet} meal={c.meal} time={c.time} />
+        <Chips diet={c.diet} meal={c.meal} time={c.time} durationS={c.duration_s} />
         {c.partial && <div className="chips"><span className="chip warn">Incomplete/conflicting source quantities - confirm before cooking</span></div>}
         <details>
           <summary>Ingredients &amp; steps</summary>
@@ -255,10 +278,19 @@ export default function App() {
   const [dataMode, setDataMode] = useState<string>('');
   const [locked, setLocked] = useState(false);
   const [videos, setVideos] = useState<VideoItem[] | null>(null);
+  const [videoTotal, setVideoTotal] = useState(0);
+  const [videoPages, setVideoPages] = useState(1);
+  const [videoPage, setVideoPage] = useState(1);
+  const [videoPageSize, setVideoPageSize] = useState(100);
   const [plan, setPlan] = useState<any | null>(null);
-  const [planStart, setPlanStart] = useState<string>('');
-  const [planLunch, setPlanLunch] = useState<boolean>(false);
-  const [planServings, setPlanServings] = useState<number>(2);
+  // Plan preferences persist per profile namespace on this device.
+  const planKey = (k: string) => 'plan_' + k + '__' + (profileName || 'default');
+  const [planStart, setPlanStartRaw] = useState<string>(() => localStorage.getItem(planKey('start')) || '');
+  const [planLunch, setPlanLunchRaw] = useState<boolean>(() => localStorage.getItem(planKey('lunch')) === '1');
+  const [planServings, setPlanServingsRaw] = useState<number>(() => parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
+  const setPlanStart = (v: string) => { setPlanStartRaw(v); localStorage.setItem(planKey('start'), v); };
+  const setPlanLunch = (v: boolean) => { setPlanLunchRaw(v); localStorage.setItem(planKey('lunch'), v ? '1' : '0'); };
+  const setPlanServings = (v: number) => { setPlanServingsRaw(v); localStorage.setItem(planKey('servings'), String(v)); };
   const [fch, setFch] = useState(''); const [fdiet, setFdiet] = useState(''); const [fq, setFq] = useState('');
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -322,10 +354,17 @@ export default function App() {
     if (fdiet) params.set('diet', fdiet);
     if (fq) params.set('q', fq);
     if (resultSort === 'name' || resultSort === 'views' || resultSort === 'newest') params.set('sort', resultSort);
+    params.set('page', String(videoPage));
+    params.set('page_size', String(videoPageSize));
     const controller = new AbortController();
-    apiFetch('/api/videos?' + params, {signal: controller.signal}).then((r) => { if (!r.ok) throw new Error('Video search failed'); return r.json(); }).then(rows => { if (!controller.signal.aborted) setVideos(rows); }).catch(() => { if (!controller.signal.aborted) setVideos([]); });
+    apiFetch('/api/videos?' + params, {signal: controller.signal}).then((r) => { if (!r.ok) throw new Error('Video search failed'); return r.json(); }).then((j: VideoPage) => { if (!controller.signal.aborted) { setVideos(j.videos || []); setVideoTotal(j.total || 0); setVideoPages(j.pages || 1); if (j.page && j.page !== videoPage) setVideoPage(j.page); } }).catch(() => { if (!controller.signal.aborted) { setVideos([]); setVideoTotal(0); setVideoPages(1); } });
     return () => controller.abort();
-  }, [tab, fch, fdiet, fq, resultSort]);
+  }, [tab, fch, fdiet, fq, resultSort, videoPage, videoPageSize]);
+
+  // Any filter/sort/tab change restarts at page 1 (page is in the fetch deps,
+  // so changing filters with page>1 first resets the page, then fetches).
+  const resetVideoPage = useCallback(() => setVideoPage(1), []);
+  useEffect(() => { resetVideoPage(); }, [tab, fch, fdiet, fq, resultSort, resetVideoPage]);
 
   useEffect(() => {
     if (tab !== 'plan') return;
@@ -451,10 +490,18 @@ export default function App() {
     }
   }
 
+  const [profileInput, setProfileInput] = useState(profileName);
+
   useEffect(() => {
     onAuthRequired = () => setLocked(true);
-    return () => { onAuthRequired = () => {}; };
-  }, []);
+    onProfileChanged = () => {
+      setProfileInput(profileName); loadHistory();
+      setPlanStartRaw(localStorage.getItem(planKey('start')) || '');
+      setPlanLunchRaw(localStorage.getItem(planKey('lunch')) === '1');
+      setPlanServingsRaw(parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
+    };
+    return () => { onAuthRequired = () => {}; onProfileChanged = () => {}; };
+  }, [loadHistory]);
 
   if (locked) {
     return (
@@ -475,6 +522,12 @@ export default function App() {
           <div className={dataMode === 'demo' ? 'modebadge demo' : 'modebadge live'}>
             {dataMode === 'demo' ? 'Recipe copy as of 27 Oct 2026 (not live) - saves/history reset on restart' : dataMode === 'pg' ? 'LIVE - your recipe database' : 'LIVE - your Google Sheet'}
           </div>
+          <label className="profilebox">Name{' '}
+            <input value={profileInput} placeholder="(shared default)"
+              onChange={(e) => setProfileInput(e.target.value)}
+              onBlur={() => setProfileNameGlobal(profileInput)}
+              onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
+          </label>
         </div>
       </header>
       <nav className="tabs">
@@ -624,14 +677,14 @@ export default function App() {
             {!INDEX_TABS.has(tab) && <><option value="time-asc">Stated cook time: shortest</option><option value="time-desc">Stated cook time: longest</option></>}
             {INDEX_TABS.has(tab) && <><option value="views">Video views: highest</option><option value="newest">Newest published</option></>}
           </select></label>
-          {!INDEX_TABS.has(tab) && <label>Cook time <select aria-label="cook time filter" value={timeBucket} onChange={e=>setTimeBucket(e.target.value as TimeBucket)}><option value="">All, including unknown</option><option value="quick">10-15 minutes</option><option value="over30">More than 30 minutes</option><option value="over60">More than 1 hour</option><option value="unknown">Not stated / not sortable</option></select></label>}
-          <p className="muted small">{INDEX_TABS.has(tab) ? 'Views are source counts; missing counts sort last. Publish dates come from the source data; videos without a date sort last. Video length is not cook time. The full matching video set is sorted before the 300-result display limit.' : 'Only complete, stated cook times are sortable; ranges sort by their upper end. Estimates and partial steps stay unknown and sort last. Time filters hide unknowns and videos without cook times.'} Difficulty and likes are not available in the source data.</p>
-          {timeBucket && <p className="muted small">Clear the cook time filter if no cards appear. The original search and history exclusions are unchanged.</p>}
+          {!INDEX_TABS.has(tab) && <label>Time <select aria-label="time filter" value={timeBucket} onChange={e=>setTimeBucket(e.target.value as TimeBucket)}><option value="">All, including unknown</option><option value="quick">Up to 15 minutes</option><option value="mid">15-30 minutes</option><option value="over30">More than 30 minutes</option><option value="unknown">Not stated / unknown</option></select></label>}
+          <p className="muted small">{INDEX_TABS.has(tab) ? 'Views are source counts; missing counts sort last. Publish dates come from the source data; videos without a date sort last. Video length is not cook time. The full matching video set is sorted before pagination.' : 'Sorting uses only complete, stated cook times (ranges sort by their upper end); estimates stay unknown and sort last. The time filter uses the stated cook time when there is one, otherwise the video length - video length is not a promised cook time.'} Difficulty and likes are not available in the source data.</p>
+          {timeBucket && <p className="muted small">Clear the time filter if no cards appear. Cards without a stated cook time are bucketed by video length, not by a promised cook time. The original search and history exclusions are unchanged.</p>}
         </section>}
 
         {tab === 'recipes' && (
           recipes.length === 0 ? <p className="muted">No checked recipes yet.</p>
-            : <div className="grid">{sortedResults(recipes,resultSort,timeBucket,c=>({name:c.name,time:c.time})).map((c) => <RecipeCard key={c.name} c={c} onSaved={loadHistory} />)}</div>
+            : <div className="grid">{sortedResults(recipes,resultSort,timeBucket,c=>({name:c.name,time:c.time,duration_s:c.duration_s})).map((c) => <RecipeCard key={c.name} c={c} onSaved={loadHistory} />)}</div>
         )}
 
         {tab === 'pick' && pickResult && (
@@ -703,14 +756,14 @@ export default function App() {
                       <p className="chips"><span className="chip warn">note/filters changed since this answer - press "Ask about the note above" again</span></p>
                     )}
                     <p style={{ whiteSpace: 'pre-wrap' }}>{askAiResult.text}</p>
-                    {sortedResults(askAiResult.recipes,resultSort,timeBucket,p=>({name:p.name,time:p.time})).map((p) => (
+                    {sortedResults(askAiResult.recipes,resultSort,timeBucket,p=>({name:p.name,time:p.time,duration_s:(p as any).duration_s})).map((p) => (
                       <div key={p.name} style={{ borderTop: '1px solid #e5e0d8', paddingTop: 8, marginTop: 8 }}>
                         <h3>{p.name}</h3>
-                        <Chips diet={p.diet} meal={p.meal} time={p.time} />
+                        <Chips diet={p.diet} meal={p.meal} time={p.time} durationS={(p as any).duration_s} />
                         <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
                       </div>
                     ))}
-                    {sortedResults(askAiResult.videos || [],resultSort,timeBucket,v=>({name:v.title})).map((v) => (
+                    {sortedResults(askAiResult.videos || [],resultSort,timeBucket,v=>({name:v.title,duration_s:(v as any).duration_s})).map((v) => (
                       <div key={v.url} style={{ borderTop: '1px solid #e5e0d8', paddingTop: 8, marginTop: 8 }}>
                         <h3>{v.title}</h3>
                         <p className="chips"><span className="chip warn">{v.status}</span><span className="chip">{v.channel}</span></p>
@@ -729,7 +782,7 @@ export default function App() {
             {pickResult.usedAI && (
               <p className="muted span-all">Reasons are AI taste suggestions, not nutrition, allergy or safety guarantees.</p>
             )}
-            {sortedResults([...pickResult.picks,...extraPicks],resultSort,timeBucket,p=>({name:p.name,time:p.time})).map((p) => (
+            {sortedResults([...pickResult.picks,...extraPicks],resultSort,timeBucket,p=>({name:p.name,time:p.time,duration_s:(p as any).duration_s})).map((p) => (
               <article className="card" key={p.name}>
                 <a className="thumb" href={p.url} target="_blank" rel="noopener">
                   <img src={thumb(p.url)} loading="lazy" alt="" />
@@ -737,7 +790,7 @@ export default function App() {
                 </a>
                 <div className="cardbody">
                   <h3>{p.name}</h3>
-                  <Chips diet={p.diet} meal={p.meal} time={p.time} />
+                  <Chips diet={p.diet} meal={p.meal} time={p.time} durationS={(p as any).duration_s} />
                   {p.reason && <p>{p.reason}</p>}
                   <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
                   <ActionButtons id={videoId(p.url)} title={p.name} onSaved={loadHistory} />
@@ -747,7 +800,7 @@ export default function App() {
             {!timeBucket && (pickResult.videos || []).length > 0 && (
               <p className="muted span-all">Only {pickResult.picks.length} checked {pickResult.picks.length === 1 ? 'recipe matches' : 'recipes match'}. Videos below are full-library matches whose ingredients and steps are not extracted yet:</p>
             )}
-            {sortedResults(pickResult.videos || [],resultSort,timeBucket,v=>({name:v.title})).map((v) => (
+            {sortedResults(pickResult.videos || [],resultSort,timeBucket,v=>({name:v.title,duration_s:(v as any).duration_s})).map((v) => (
               <article className="card" key={v.video_id}>
                 <a className="thumb" href={v.url} target="_blank" rel="noopener">
                   <img src={thumb(v.url)} loading="lazy" alt="" />
@@ -761,7 +814,7 @@ export default function App() {
                 </div>
               </article>
             ))}
-            {sortedResults(extraVideos,resultSort,timeBucket,v=>({name:v.title})).map((v) => (
+            {sortedResults(extraVideos,resultSort,timeBucket,v=>({name:v.title,duration_s:(v as any).duration_s})).map((v) => (
               <article className="card" key={v.video_id}>
                 <a className="thumb" href={v.url} target="_blank" rel="noopener">
                   <img src={thumb(v.url)} loading="lazy" alt="" />
@@ -785,6 +838,12 @@ export default function App() {
           </div>
         )}
 
+        {INDEX_TABS.has(tab) && videos !== null && (
+          <p className="muted small seccount" aria-live="polite">
+            {videoTotal === 0 ? 'No videos match the current filters.'
+              : <>Showing {(videoPage - 1) * videoPageSize + 1}-{Math.min(videoPage * videoPageSize, videoTotal)} of {videoTotal.toLocaleString()} matching videos{videoPages > 1 ? ` - page ${videoPage} of ${videoPages}` : ''}.</>}
+          </p>
+        )}
         {INDEX_TABS.has(tab) && (
           videos === null ? <p className="muted">Loading...</p>
             : videos.length === 0 ? <p className="muted">No videos match. Clear search or filters.</p>
@@ -803,6 +862,31 @@ export default function App() {
                 </div>
               </article>
             ))
+        )}
+
+        {INDEX_TABS.has(tab) && videos !== null && videoTotal > 0 && (
+          <nav className="pager" aria-label="video pages">
+            <button className="btn ghost" disabled={videoPage <= 1} onClick={() => setVideoPage(videoPage - 1)}>Previous</button>
+            <span className="pager-nums">
+              {(() => {
+                const nums: number[] = [];
+                const around = 2;
+                const lo = Math.max(1, videoPage - around), hi = Math.min(videoPages, videoPage + around);
+                if (lo > 1) nums.push(1);
+                if (lo > 2) nums.push(-1);
+                for (let n = lo; n <= hi; n++) nums.push(n);
+                if (hi < videoPages - 1) nums.push(-1);
+                if (hi < videoPages) nums.push(videoPages);
+                return nums.map((n, i) => n === -1
+                  ? <span key={'e' + i} className="muted"> ... </span>
+                  : <button key={n} className={'btn ghost pagenum' + (n === videoPage ? ' on' : '')} aria-current={n === videoPage ? 'page' : undefined} onClick={() => setVideoPage(n)}>{n}</button>);
+              })()}
+            </span>
+            <button className="btn ghost" disabled={videoPage >= videoPages} onClick={() => setVideoPage(videoPage + 1)}>Next</button>
+            <label className="muted small">Per page <select aria-label="videos per page" value={videoPageSize} onChange={(e) => { setVideoPageSize(parseInt(e.target.value, 10)); setVideoPage(1); }}>
+              <option value={50}>50</option><option value={100}>100</option><option value={200}>200</option>
+            </select></label>
+          </nav>
         )}
 
         {tab === 'comms' && (

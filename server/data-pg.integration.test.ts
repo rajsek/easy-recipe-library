@@ -61,6 +61,18 @@ test('pg integration: schema + seed-style insert + readTab/appendRow round-trip'
   assert.equal(raw[0].parse_status, 'parsed');
 });
 
+test('pg integration: profile column round-trips and defaults to empty namespace', async () => {
+  const { db, store } = await boot();
+  await store.appendRow('History', ['2026-10-27', 'v1', 'Dish', 'saved', 'app button']); // no profile -> default ''
+  await store.appendRow('History', ['2026-10-27', 'v2', 'Dish2', 'cooked', 'app button', 'amma']);
+  const rows = await store.readTab('History');
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].profile, '');
+  assert.equal(rows[1].profile, 'amma');
+  const [{ n }] = (await db.query("SELECT count(*)::int AS n FROM history WHERE profile = ''")).rows as any[];
+  assert.equal(n, 1);
+});
+
 test('pg integration: seed idempotency guard data (count check) works on schema', async () => {
   const { db } = await boot();
   const [{ n }] = (await db.query('SELECT count(*)::int AS n FROM videos')).rows as any[];

@@ -1,5 +1,24 @@
 export type SortKey = 'original' | 'name' | 'time-asc' | 'time-desc' | 'views' | 'newest';
-export type TimeBucket = '' | 'quick' | 'over30' | 'over60' | 'unknown';
+// Bins match the data we actually have (recipe-linked durations cluster under
+// 30 min). A stated cook time always wins; when none is stated the LINKED
+// VIDEO's length is the fallback criterion - labelled, never silent.
+export type TimeBucket = '' | 'quick' | 'mid' | 'over30' | 'unknown';
+export const TIME_BUCKET_LABELS: Record<Exclude<TimeBucket, ''>, string> = {
+  quick: 'Up to 15 minutes', mid: '15-30 minutes', over30: 'More than 30 minutes', unknown: 'Not stated / unknown',
+};
+function bucketOf(minutes: number): Exclude<TimeBucket, ''> {
+  return minutes <= 15 ? 'quick' : minutes <= 30 ? 'mid' : 'over30';
+}
+/** Minutes usable for time filtering: stated cook time first, else the linked
+ *  video's duration in seconds. source tells the UI which one it is. */
+export function filterMinutes(time: string | undefined, durationS?: unknown): { minutes: number; source: 'stated' | 'video' } | undefined {
+  const stated = statedCookMinutes(time || '');
+  if (stated !== undefined) return { minutes: stated, source: 'stated' };
+  const s = String(durationS ?? '').trim();
+  if (!/^\d+$/.test(s)) return;
+  const m = Math.round(Number(s) / 60);
+  return m > 0 ? { minutes: m, source: 'video' } : undefined;
+}
 
 // Only a complete, explicitly stated duration is sortable. Segment timings,
 // video lengths, and estimates are not substitutes for a cooking duration.
@@ -37,17 +56,24 @@ export function viewCount(raw: unknown): number | undefined {
 
 export function sortedResults<T>(
   items: T[], sort: SortKey, bucket: TimeBucket,
-  fields: (x: T) => { name: string; time?: string; views?: unknown; published?: unknown }
+  fields: (x: T) => { name: string; time?: string; duration_s?: unknown; views?: unknown; published?: unknown }
 ): T[] {
   const rows = items.map((x, i) => {
     const value = fields(x);
-    return { x, i, ...value, range: statedCookRange(value.time || ''), count: viewCount(value.views), published: publishedTime(value.published) };
+    return { x, i, ...value, range: statedCookRange(value.time || ''), filter: filterMinutes(value.time, value.duration_s), count: viewCount(value.views), published: publishedTime(value.published) };
   }).filter(r => {
     if (!bucket) return true;
-    if (bucket === 'unknown') return !r.range;
-    if (!r.range) return false;
-    const [low, high] = r.range;
-    return bucket === 'quick' ? low >= 10 && high <= 15 : low > (bucket === 'over30' ? 30 : 60);
+    if (bucket === 'unknown') return !r.filter;
+    // A stated range must lie wholly inside one bucket; a range that straddles
+    // a boundary is honest about its span and so appears in no time bucket
+    // (it is still not 'unknown' - it has a stated time).
+    if (r.range) {
+      const [low, high] = r.range;
+      const b = high <= 15 ? 'quick' : low > 15 && high <= 30 ? 'mid' : low > 30 ? 'over30' : undefined;
+      return b === bucket;
+    }
+    if (!r.filter) return false;
+    return bucketOf(r.filter.minutes) === bucket;
   });
   const numeric = (a: number | undefined, b: number | undefined, desc = false) =>
     a === undefined ? (b === undefined ? 0 : 1) : b === undefined ? -1 : desc ? b - a : a - b;

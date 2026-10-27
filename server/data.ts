@@ -18,6 +18,13 @@ import { sortedResults, type SortKey } from '../web/src/result-sort.js';
 
 export interface VideoFilter { q?: string; channel?: string; diet?: string; category?: string; sort?: string; }
 
+/** Self-declared profile name (logical isolation only, NOT an auth boundary):
+ * normalised to a lowercase collapsed-space key so "Raja " and "raja" collide
+ * into one profile. Returns '' when no usable name was provided. */
+export function normalizeProfile(raw: unknown): string {
+  return String(raw ?? '').normalize('NFC').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 40);
+}
+
 type Row = Record<string, any>;
 
 const MODE = (process.env.DATA_MODE || 'demo').toLowerCase();
@@ -105,10 +112,10 @@ async function appendRow(name: string, row: any[]): Promise<void> {
 // between this app and the owner's assistant. The app appends a request row;
 // the assistant reads pending rows and writes the answer back. Row content is
 // data, never instructions to either side.
-export interface QueueRequest { diet: string; meal: string; note: string; }
+export interface QueueRequest { diet: string; meal: string; note: string; profile?: string; }
 export async function addQueueRequest(q: QueueRequest): Promise<string> {
   const id = 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  await appendRow('Queue', [id, new Date().toISOString(), q.diet, q.meal, q.note, 'pending', '', '']);
+  await appendRow('Queue', [id, new Date().toISOString(), q.diet, q.meal, q.note, 'pending', '', '', normalizeProfile(q.profile)]);
   return id;
 }
 export async function getQueueRequest(id: string): Promise<{ status: string; answer: string } | null> {
@@ -122,7 +129,7 @@ export async function getVideos(filter: VideoFilter) {
   return selectVideoRows(await readTab('Videos'), filter);
 }
 
-// Order the full matching source set before applying the existing result cap.
+// Order the full matching source set; pagination happens at the API layer.
 export function selectVideoRows(rows: Row[], filter: VideoFilter) {
   const q = (filter.q || '').toLowerCase();
   const matches = rows.filter((r) => {
@@ -136,12 +143,12 @@ export function selectVideoRows(rows: Row[], filter: VideoFilter) {
     return true;
   });
   const sort: SortKey = filter.sort === 'name' || filter.sort === 'views' || filter.sort === 'newest' ? filter.sort : 'original';
-  return sortedResults(matches, sort, '', r => ({name: String(r.title || ''), views: r.views, published: r.yt_publish_date})).slice(0, 300).map((r) => ({
+  return sortedResults(matches, sort, '', r => ({name: String(r.title || ''), views: r.views, published: r.yt_publish_date})).map((r) => ({
     id: r.video_id, title: r.title, channel: r.channel,
     // url/thumb columns are omitted from the snapshot (derivable from the id)
     url: r.url || (r.video_id ? 'https://www.youtube.com/watch?v=' + r.video_id : ''),
     thumb: r.thumbnail_url || (r.video_id ? 'https://i.ytimg.com/vi/' + r.video_id + '/mqdefault.jpg' : ''),
-    views: r.views, category: r.category,
+    views: r.views, category: r.category, duration_s: r.duration_s || '',
     diet: videoDietHint(r.title, r.diet_hint), published: r.yt_publish_date || '', status: r.extraction_status
   }));
 }
@@ -154,42 +161,59 @@ export async function getChannels(): Promise<string[]> {
   return out;
 }
 
-/** Verified + partially-verified recipes. Raw extracts never appear here. */
+/** Verified + partially-verified recipes. Raw extracts never appear here.
+ *  duration_s is the LINKED VIDEO's length (fallback for the time filter when
+ *  the source states no cook time) - it is never presented as cook time. */
 export async function getRecipes() {
-  return (await readTab('Recipes')).filter((r) => {
+  const rows = (await readTab('Recipes')).filter((r) => {
     const v = String(r.verified).toLowerCase();
     return v === 'yes' || v === 'partial';
-  }).map((r) => ({
+  });
+  const dur: Record<string, string> = {};
+  for (const v of await readTab('Videos')) if (v.url) dur[v.url] = v.duration_s || '';
+  return rows.map((r) => ({
     name: r.recipe_name, url: r.video_url, channel: r.channel,
-    diet: r.diet, meal: r.meal_type, time: r.time_notes,
+    diet: r.diet, meal: r.meal_type, time: r.time_notes, duration_s: dur[r.video_url] || '',
     ingredients: r.ingredients, steps: String(r.steps).split(' | '),
     source: r.source_note,
     partial: String(r.verified).toLowerCase() === 'partial'
   }));
 }
 
-/** Raw recipe rows for the picker (includes the verified flag). */
+/** Raw recipe rows for the picker (includes the verified flag), with the
+ *  linked video's duration joined in for the labelled time-filter fallback. */
 export async function getRecipeRows(): Promise<Row[]> {
-  return readTab('Recipes');
+  const rows = await readTab('Recipes');
+  const dur: Record<string, string> = {};
+  for (const v of await readTab('Videos')) if (v.url) dur[v.url] = v.duration_s || '';
+  return rows.map((r) => ({ ...r, duration_s: dur[String(r.video_url || '')] || '' }));
 }
 
-export async function getHistory() {
-  return (await readTab('History')).map((r) => ({
+/** Rows belonging to one profile namespace. Rows with no profile predate
+ *  profiles: they stay visible ONLY to the default (unnamed) profile, never
+ *  copied or re-attributed to a named one. */
+function forProfile(rows: Row[], profile: string): Row[] {
+  const key = normalizeProfile(profile);
+  return rows.filter((r) => normalizeProfile(r.profile) === key);
+}
+
+export async function getHistory(profile: string) {
+  return forProfile(await readTab('History'), profile).map((r) => ({
     date: String(r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date),
     id: r.video_id, title: r.title, state: r.state
   }));
 }
 
-export async function getHistoryRows(): Promise<Row[]> { return readTab('History'); }
-export async function getPickRows(): Promise<Row[]> { return readTab('Picks'); }
+export async function getHistoryRows(profile: string): Promise<Row[]> { return forProfile(await readTab('History'), profile); }
+export async function getPickRows(profile: string): Promise<Row[]> { return forProfile(await readTab('Picks'), profile); }
 
 const ALLOWED_STATES = new Set(['saved-for-later', 'chosen', 'cooked', 'favourite']);
 
-export async function saveHistory(videoId: string, title: string, state: string) {
+export async function saveHistory(videoId: string, title: string, state: string, profile: string) {
   if (!ALLOWED_STATES.has(state)) throw new Error('bad state');
   const date = new Date().toISOString().slice(0, 10);
   if (MODE === 'demo') return { ok: true, date }; // caller keeps it in memory
-  await appendRow('History', [date, videoId, title, state, 'app button']);
+  await appendRow('History', [date, videoId, title, state, 'app button', normalizeProfile(profile)]);
   return { ok: true, date };
 }
 
@@ -197,13 +221,13 @@ export async function saveHistory(videoId: string, title: string, state: string)
  *  (resets on server restart, like demo history). */
 export const demoPicks: Row[] = [];
 
-export async function recordPick(filter: any, note: string, ids: string[], names: string[]) {
+export async function recordPick(filter: any, note: string, ids: string[], names: string[], profile: string) {
   const date = new Date().toISOString().slice(0, 10);
   if (MODE === 'demo') {
-    demoPicks.push({ date, suggested_video_ids: ids.join(',') });
+    demoPicks.push({ date, suggested_video_ids: ids.join(','), profile: normalizeProfile(profile) });
     return;
   }
-  await appendRow('Picks', [date, JSON.stringify(filter || {}), note || '', ids.join(','), '', names.join(' | ')]);
+  await appendRow('Picks', [date, JSON.stringify(filter || {}), note || '', ids.join(','), '', names.join(' | '), normalizeProfile(profile)]);
 }
 
 export const mode = MODE;

@@ -171,3 +171,6 @@ a.rowtitle:hover { color:var(--leaf); }
 .plan-day-compact { display: block; font-size: 12.5px; margin-top: 2px; line-height: 1.35; }
 .plan-day[open] > .plan-day-summary .plan-day-compact { display: none; }
 .plan-day ul { margin: 4px 0 4px 18px; padding: 0; }
+.profilebox { display:flex; align-items:center; gap:6px; font-size:13px; color:#f4f1e8; }
+.profilebox input { background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35); color:#f4f1e8; border-radius:6px; padding:4px 8px; font-size:13px; width:140px; }
+.profilebox input::placeholder { color:rgba(244,241,232,.6); }

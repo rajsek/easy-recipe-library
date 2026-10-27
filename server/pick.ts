@@ -609,7 +609,7 @@ export async function pickForMe(
     noteInfo,
     note: finalNote,
     picks: chosen.map((r: any) => ({
-      name: r.recipe_name, url: r.video_url, time: r.time_notes || '',
+      name: r.recipe_name, url: r.video_url, time: r.time_notes || '', duration_s: r.duration_s || '',
       diet: r.diet || '', meal: r.meal_type || '', reason: r._reason || ''
     })),
     ids
