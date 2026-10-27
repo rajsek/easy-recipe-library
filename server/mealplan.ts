@@ -330,7 +330,7 @@ export function generatePlan(input: PlanInput): PlanResult {
     start: input.start, days, servings, lunch_other_days: lunchOtherDays, days_plan: out,
     assumptions: [
       'SAMPLE MENU ONLY - not personalized: dietary needs, allergies and who is eating are not confirmed yet.',
-      'Nutrition, where shown, is the WHOLE RECIPE BATCH total - not one meal. No recipe in this library states its yield, so no per-portion split is shown: the Share-of-batch calculator on a card only divides the batch total (1/2, 1/3, 1/4, 1/6) - arithmetic, not a serving recommendation. Cards whose source leaves a critical quantity unstated (like oil or eggs) show no numbers at all.',
+      'Nutrition, where shown, is the WHOLE RECIPE BATCH total - not one meal. No source-stated yield has been recorded for these recipes, so no per-portion split is shown: the Share-of-batch calculator on a card only divides the batch total (1/2, 1/3, 1/4, 1/6) - arithmetic, not a serving recommendation. Cards whose source leaves a critical quantity unstated (like oil or eggs) show no numbers at all.',
       'Numbers appear only on cards that passed a full ingredient/unit audit: every critical quantity (staples, protein, oil, dairy, eggs) must be stated in the source and resolvable with ingredient-specific weights. Cards missing any of these say so instead of showing a partial sum.',
       'Video references below a slot are unextracted videos - reference pointers only, not recipe or nutrition claims.',
       'Lunch pattern: ' + (lunchOtherDays ? 'lunch every day (editable)' : 'no lunch on Monday, Wednesday, Friday; lunch on all other days (from the original request, editable)') + '.',

@@ -108,7 +108,7 @@ function ShareCalc({ n }: { n: { kcal: number; protein_g: number; fat_g: number;
     <details className="plan-share">
       <summary>Share of batch (calculator)</summary>
       <div className="plan-share-body">
-        <span className="muted small">Divides the whole-batch total - arithmetic, not a serving recommendation. No recipe in this library states its yield.</span>
+        <span className="muted small">Divides the whole-batch total - arithmetic, not a serving recommendation. Source yield hasn't been recorded for this card.</span>
         <span className="plan-share-chips">{chips.map(([d, l]) => (
           <button key={d} type="button" className={'sharechip' + (f === d ? ' on' : '')} onClick={() => setF(d)}>{l}</button>
         ))}</span>
