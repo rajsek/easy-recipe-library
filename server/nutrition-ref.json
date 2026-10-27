@@ -4,21 +4,35 @@
   "protein_g": 9.16,
   "fat_g": 1.24,
   "carb_g": 74.8,
-  "fibre_g": 4.43
+  "fibre_g": 4.43,
+  "cup_g": 185,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 11.56,
+  "tsp_g": 3.85
  },
  "bengal_gram_dal": {
   "kcal": 329,
   "protein_g": 21.55,
   "fat_g": 5.31,
   "carb_g": 46.72,
-  "fibre_g": 15.15
+  "fibre_g": 15.15,
+  "cup_g": 92,
+  "note_extra": "cup weight from Chickpea flour (besan) - whole-dal cup not in USDA; besan is the ground form",
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 5.75,
+  "tsp_g": 1.92
  },
  "green_gram_dal": {
   "kcal": 326,
   "protein_g": 23.88,
   "fat_g": 1.35,
   "carb_g": 52.59,
-  "fibre_g": 9.37
+  "fibre_g": 9.37,
+  "cup_g": 192,
+  "note_extra": "cup weight from Lentils, raw (USDA) - moong-specific cup not listed",
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 12.0,
+  "tsp_g": 4.0
  },
  "tomato": {
   "kcal": 19,
@@ -32,7 +46,10 @@
   "protein_g": 1.5,
   "fat_g": 0.24,
   "carb_g": 9.56,
-  "fibre_g": 2.45
+  "fibre_g": 2.45,
+  "cup_g": 160,
+  "tbsp_g": 10.0,
+  "tsp_g": 3.33
  },
  "potato": {
   "kcal": 70,
@@ -53,7 +70,10 @@
   "protein_g": 0.95,
   "fat_g": 0.47,
   "carb_g": 5.55,
-  "fibre_g": 4.18
+  "fibre_g": 4.18,
+  "cup_g": 110,
+  "tbsp_g": 6.88,
+  "tsp_g": 2.29
  },
  "french_beans": {
   "kcal": 24,
@@ -67,14 +87,21 @@
   "protein_g": 3.42,
   "fat_g": 1.38,
   "carb_g": 3.69,
-  "fibre_g": 5.6
+  "fibre_g": 5.6,
+  "cup_g": 107,
+  "tbsp_g": 6.69,
+  "tsp_g": 2.23
  },
  "coriander_leaves": {
   "kcal": 31,
   "protein_g": 3.52,
   "fat_g": 0.7,
   "carb_g": 1.93,
-  "fibre_g": 4.66
+  "fibre_g": 4.66,
+  "tsp_g": 0.6,
+  "tbsp_g": 1.8,
+  "note_extra": "dried-leaf weight; fresh leaves weigh more per spoon",
+  "portion_source": "USDA SR Legacy portion data"
  },
  "curry_leaves": {
   "kcal": 64,
@@ -102,14 +129,20 @@
   "protein_g": 7.66,
   "fat_g": 5.03,
   "carb_g": 49.22,
-  "fibre_g": 21.38
+  "fibre_g": 21.38,
+  "tsp_g": 3.0,
+  "tbsp_g": 9.4,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "cumin_seed": {
   "kcal": 304,
   "protein_g": 13.91,
   "fat_g": 16.64,
   "carb_g": 22.62,
-  "fibre_g": 30.35
+  "fibre_g": 30.35,
+  "tsp_g": 2.1,
+  "tbsp_g": 6.0,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "tamarind_pulp": {
   "kcal": 71,
@@ -137,7 +170,11 @@
   "protein_g": 3.26,
   "fat_g": 4.48,
   "carb_g": 4.94,
-  "fibre_g": 0
+  "fibre_g": 0,
+  "cup_g": 244,
+  "tbsp_g": 15.3,
+  "portion_source": "USDA SR Legacy portion data",
+  "tsp_g": 5.1
  },
  "milk_buffalo": {
   "kcal": 107,
@@ -174,7 +211,9 @@
    "bread_white",
    "sausage_pork",
    "sweet_corn"
-  ]
+  ],
+  "portion_weights": "cup/tsp/tbsp gram-weights from USDA FoodData Central SR Legacy foodPortions (public bulk download). Entries marked note_extra use the closest listed form.",
+  "derived_portions": "tbsp_g = cup_g/16 and tsp_g = cup_g/48 derived arithmetically from the sourced cup weight where no explicit sourced tsp/tbsp weight exists."
  },
  "poha_rice_flakes": {
   "kcal": 354,
@@ -188,7 +227,11 @@
   "protein_g": 3.84,
   "fat_g": 41.38,
   "carb_g": 6.3,
-  "fibre_g": 10.42
+  "fibre_g": 10.42,
+  "cup_g": 80,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 5.0,
+  "tsp_g": 1.67
  },
  "oil_generic": {
   "kcal": 884,
@@ -197,7 +240,11 @@
   "carb_g": 0,
   "fibre_g": 0,
   "approx": true,
-  "note": "Standard pure refined oil composition (99.9% fat, 3700 kJ/100g). IFCT 2017 oils table present but its proximate row was not machine-extractable from the PDF text."
+  "note": "Standard pure refined oil composition (99.9% fat, 3700 kJ/100g). IFCT 2017 oils table present but its proximate row was not machine-extractable from the PDF text.",
+  "cup_g": 218,
+  "tbsp_g": 13.6,
+  "tsp_g": 4.5,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "curd": {
   "kcal": 73,
@@ -206,63 +253,97 @@
   "carb_g": 4.94,
   "fibre_g": 0,
   "approx": true,
-  "note": "Approximated from IFCT whole cow milk (fermentation changes macros little at this precision)."
+  "note": "Proxy: derived from IFCT whole cow milk; fermentation shifts macros (real curd typically lower carb). Not the same food.",
+  "cup_g": 245,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 15.3,
+  "tsp_g": 5.1,
+  "proxy": true
  },
  "urad_dal_black_gram": {
   "kcal": 324,
   "protein_g": 23.06,
   "fat_g": 1.69,
   "carb_g": 51.0,
-  "fibre_g": 11.93
+  "fibre_g": 11.93,
+  "cup_g": 192,
+  "note_extra": "cup weight from Lentils, raw (USDA)",
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 12.0,
+  "tsp_g": 4.0
  },
  "toor_dal_red_gram": {
   "kcal": 331,
   "protein_g": 21.7,
   "fat_g": 1.56,
   "carb_g": 55.23,
-  "fibre_g": 9.06
+  "fibre_g": 9.06,
+  "cup_g": 192,
+  "note_extra": "cup weight from Lentils, raw (USDA)",
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 12.0,
+  "tsp_g": 4.0
  },
  "black_pepper": {
   "kcal": 217,
   "protein_g": 10.12,
   "fat_g": 2.74,
   "carb_g": 36.22,
-  "fibre_g": 33.16
+  "fibre_g": 33.16,
+  "tsp_g": 2.3,
+  "tbsp_g": 6.9,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "mustard_seeds": {
   "kcal": 510,
   "protein_g": 19.51,
   "fat_g": 40.19,
   "carb_g": 16.8,
-  "fibre_g": 14.1
+  "fibre_g": 14.1,
+  "tsp_g": 2.0,
+  "tbsp_g": 6.3,
+  "note_extra": "from mustard seed, ground",
+  "portion_source": "USDA SR Legacy portion data"
  },
  "coriander_seeds": {
   "kcal": 269,
   "protein_g": 10.66,
   "fat_g": 17.47,
   "carb_g": 12.98,
-  "fibre_g": 44.81
+  "fibre_g": 44.81,
+  "tsp_g": 1.8,
+  "tbsp_g": 5.0,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "fenugreek_seeds": {
   "kcal": 235,
   "protein_g": 25.41,
   "fat_g": 5.72,
   "carb_g": 10.57,
-  "fibre_g": 47.55
+  "fibre_g": 47.55,
+  "tsp_g": 3.7,
+  "tbsp_g": 11.1,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "cloves": {
   "kcal": 187,
   "protein_g": 5.86,
   "fat_g": 8.41,
   "carb_g": 18.73,
-  "fibre_g": 34.52
+  "fibre_g": 34.52,
+  "tsp_g": 2.1,
+  "tbsp_g": 6.5,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "cardamom_green": {
   "kcal": 255,
   "protein_g": 8.1,
   "fat_g": 2.6,
   "carb_g": 47.76,
-  "fibre_g": 23.1
+  "fibre_g": 23.1,
+  "tsp_g": 2.0,
+  "tbsp_g": 5.8,
+  "portion_source": "USDA SR Legacy portion data"
  },
  "green_chillies": {
   "kcal": 42,
@@ -283,21 +364,32 @@
   "protein_g": 11.38,
   "fat_g": 0.74,
   "carb_g": 68.43,
-  "fibre_g": 9.72
+  "fibre_g": 9.72,
+  "cup_g": 167,
+  "tbsp_g": 10.44,
+  "tsp_g": 3.48
  },
  "maida_refined_flour": {
   "kcal": 352,
   "protein_g": 10.36,
   "fat_g": 0.76,
   "carb_g": 74.27,
-  "fibre_g": 2.76
+  "fibre_g": 2.76,
+  "cup_g": 125,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 7.81,
+  "tsp_g": 2.6
  },
  "atta_whole_wheat_flour": {
   "kcal": 320,
   "protein_g": 10.57,
   "fat_g": 1.53,
   "carb_g": 64.17,
-  "fibre_g": 11.36
+  "fibre_g": 11.36,
+  "cup_g": 120,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 7.5,
+  "tsp_g": 2.5
  },
  "egg_chicken_whole_raw": {
   "kcal": 135,
@@ -311,7 +403,11 @@
   "protein_g": 12.69,
   "fat_g": 6.4,
   "carb_g": 29.46,
-  "fibre_g": 31.15
+  "fibre_g": 31.15,
+  "tsp_g": 2.7,
+  "tbsp_g": 8.0,
+  "note_extra": "tsp/tbsp from Spices, chili powder (ground form)",
+  "portion_source": "USDA SR Legacy portion data"
  },
  "butter": {
   "kcal": 717,
@@ -320,7 +416,10 @@
   "carb_g": 0.1,
   "fibre_g": 0,
   "approx": true,
-  "note": "Standard dairy butter composition (~81% fat). IFCT 2017 butter/ghee proximate rows were not machine-extractable from the PDF text."
+  "note": "Standard dairy butter composition (~81% fat). IFCT 2017 butter/ghee proximate rows were not machine-extractable from the PDF text.",
+  "cup_g": 227,
+  "tbsp_g": 14.2,
+  "tsp_g": 4.7
  },
  "sugar_white": {
   "kcal": 400,
@@ -329,7 +428,11 @@
   "carb_g": 99.9,
   "fibre_g": 0,
   "approx": true,
-  "note": "Standard white sugar composition (~100% sucrose). IFCT 2017 sugars table lists jaggery and sugarcane juice only in the extractable text."
+  "note": "Standard white sugar composition (~100% sucrose). IFCT 2017 sugars table lists jaggery and sugarcane juice only in the extractable text.",
+  "cup_g": 200,
+  "tsp_g": 4.2,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 12.5
  },
  "jowar": {
   "kcal": 334,
@@ -343,14 +446,22 @@
   "protein_g": 2.57,
   "fat_g": 0.34,
   "carb_g": 71.29,
-  "fibre_g": 3.92
+  "fibre_g": 3.92,
+  "cup_g": 145,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 9.06,
+  "tsp_g": 3.02
  },
  "peanut_groundnut": {
   "kcal": 520,
   "protein_g": 23.65,
   "fat_g": 39.63,
   "carb_g": 17.27,
-  "fibre_g": 10.38
+  "fibre_g": 10.38,
+  "cup_g": 146,
+  "portion_source": "USDA SR Legacy portion data",
+  "tbsp_g": 9.12,
+  "tsp_g": 3.04
  },
  "soy_sauce": {
   "kcal": 53,
@@ -386,7 +497,10 @@
   "carb_g": 2.84,
   "fibre_g": 0.0,
   "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
-  "usda_description": "Cream, fluid, heavy whipping"
+  "usda_description": "Cream, fluid, heavy whipping",
+  "cup_g": 238,
+  "tbsp_g": 15.0,
+  "tsp_g": 4.96
  },
  "sour_cream": {
   "kcal": 198,
@@ -395,7 +509,10 @@
   "carb_g": 4.63,
   "fibre_g": 0.0,
   "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
-  "usda_description": "Cream, sour, cultured"
+  "usda_description": "Cream, sour, cultured",
+  "cup_g": 230,
+  "tbsp_g": 12.0,
+  "tsp_g": 4.79
  },
  "tuna_canned": {
   "kcal": 86,
@@ -478,6 +595,96 @@
   "protein_g": 19.17,
   "fat_g": 43.1,
   "carb_g": 10.29,
-  "fibre_g": 17.16
+  "fibre_g": 17.16,
+  "cup_g": 144,
+  "tbsp_g": 9.0,
+  "tsp_g": 3.0
+ },
+ "cabbage": {
+  "kcal": 25,
+  "source": "USDA SR Legacy: Cabbage, raw",
+  "protein_g": 1.28,
+  "fat_g": 0.1,
+  "carb_g": 5.8,
+  "fibre_g": 2.5
+ },
+ "chicken_breast": {
+  "kcal": 165,
+  "source": "USDA SR Legacy: Chicken breast, meat only, cooked, roasted",
+  "protein_g": 31.0,
+  "fat_g": 3.57,
+  "carb_g": 0.0,
+  "fibre_g": 0.0
+ },
+ "soya_chunks": {
+  "kcal": 327,
+  "protein_g": 51.5,
+  "fat_g": 1.22,
+  "carb_g": 33.9,
+  "fibre_g": 17.5,
+  "approx": true,
+  "source": "USDA SR Legacy: Soy flour, defatted (proxy for soya chunks/TVP; commercial chunks list ~52g protein/100g)",
+  "usda_description": "Soy flour, defatted",
+  "proxy": true,
+  "note": "Proxy: USDA defatted soy flour for soya chunks/TVP. Not the same food; commercial chunks list ~52g protein/100g, consistent but unverified per brand."
+ },
+ "fennel_seed": {
+  "kcal": 345,
+  "protein_g": 15.8,
+  "fat_g": 14.9,
+  "carb_g": 52.3,
+  "fibre_g": 39.8,
+  "tsp_g": 2.0,
+  "tbsp_g": 5.8,
+  "source": "USDA SR Legacy: Spices, fennel seed"
+ },
+ "corn_flour": {
+  "kcal": 381,
+  "protein_g": 0.26,
+  "fat_g": 0.05,
+  "carb_g": 91.3,
+  "fibre_g": 0.9,
+  "cup_g": 128,
+  "source": "USDA SR Legacy: Cornstarch",
+  "tbsp_g": 8.0,
+  "tsp_g": 2.67
+ },
+ "mayonnaise": {
+  "kcal": 680,
+  "protein_g": 0.96,
+  "fat_g": 74.8,
+  "carb_g": 0.57,
+  "fibre_g": 0.0,
+  "cup_g": 220,
+  "tbsp_g": 13.8,
+  "source": "USDA SR Legacy: Salad dressing, mayonnaise, regular",
+  "tsp_g": 4.58
+ },
+ "cashew": {
+  "kcal": 553,
+  "protein_g": 18.2,
+  "fat_g": 43.8,
+  "carb_g": 30.2,
+  "fibre_g": 3.3,
+  "source": "USDA SR Legacy: Nuts, cashew nuts, raw"
+ },
+ "almond": {
+  "kcal": 579,
+  "protein_g": 21.2,
+  "fat_g": 49.9,
+  "carb_g": 21.6,
+  "fibre_g": 12.5,
+  "cup_g": 143,
+  "source": "USDA SR Legacy: Nuts, almonds",
+  "tbsp_g": 8.94,
+  "tsp_g": 2.98
+ },
+ "green_peas": {
+  "kcal": 81,
+  "protein_g": 5.42,
+  "fat_g": 0.4,
+  "carb_g": 14.5,
+  "fibre_g": 5.7,
+  "source": "USDA SR Legacy: Peas, green, raw"
  }
 }

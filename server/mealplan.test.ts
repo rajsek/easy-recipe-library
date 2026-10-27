@@ -63,3 +63,36 @@ test('side_only slots get a concrete staple proposal', () => {
   assert.ok(lunch.recipe?.staple_suggestion?.text.includes('pair with'), JSON.stringify(lunch.recipe?.staple_suggestion));
   assert.ok(lunch.recipe?.portion_assumption.includes('assumption'));
 });
+
+test('estimateNutrition rejects cards with a missing critical egg count', () => {
+  const e = estimateNutrition('Eggs (number not written in the description - shown in the video), 1 onion, 1/4 tsp turmeric');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /egg/i.test(r)), e.ineligible_reasons.join(' | '));
+});
+
+test('estimateNutrition rejects cards that exclude deep-frying oil', () => {
+  const e = estimateNutrition('250g urad dal, 1 onion, 2 green chillies, oil for deep frying');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /frying/i.test(r)), e.ineligible_reasons.join(' | '));
+});
+
+test('estimateNutrition rejects cards with an unstated oil quantity', () => {
+  const e = estimateNutrition('200g paneer, 1 onion, oil QUANTITY UNSPECIFIED IN SOURCE');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /oil/i.test(r)), e.ineligible_reasons.join(' | '));
+});
+
+test('estimateNutrition rejects proxy stand-ins that are not the same food', () => {
+  const e = estimateNutrition('200g paneer, 1 cup curd, 2 tbsp oil');
+  assert.equal(e.eligible, false);
+  assert.ok(e.ineligible_reasons.some((r) => /stand-in|curd/i.test(r)), e.ineligible_reasons.join(' | '));
+});
+
+test('eligible card exposes whole-batch and per-portion numbers distinctly', () => {
+  const plan = generatePlan({ recipes: [{ name: 'X', url: 'u', channel: 'c', diet: 'Veg', meal: 'Lunch', ingredients: '200g paneer, 2 onions, 1 tbsp oil, 100g tomato', partial: false }], videos: [], start: '2026-10-27', days: 1, lunchOtherDays: true, servings: 2 });
+  const r = plan.days_plan[0].slots.map((s) => s.recipe).find(Boolean)!;
+  assert.equal(r.nutrition.eligible, true);
+  assert.ok(r.nutrition_per_portion, 'per-portion block must exist for eligible cards');
+  assert.equal(r.nutrition_per_portion!.kcal, Math.round(r.nutrition.kcal / 2));
+  assert.ok(/whole recipe treated as 2 portion/.test(r.portion_assumption));
+});

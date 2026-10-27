@@ -856,7 +856,16 @@ export default function App() {
                             <span className="muted"> image: video preview, not a verified dish photo</span>
                             {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="muted"> - side dish; {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
                             {' '}
-                            <span className="muted">nutrition estimate pending full ingredient/unit audit</span>
+                            {s.recipe.nutrition && s.recipe.nutrition.eligible && s.recipe.nutrition_per_portion ? (
+                              <span className="plan-nutrition">
+                                <span className="plan-nutrition-batch"><b>Whole recipe batch:</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
+                                <span className="plan-nutrition-portion"><b>Per portion</b> ({s.recipe.portion_assumption}): ~{s.recipe.nutrition_per_portion.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition_per_portion.protein_g}g, fat {s.recipe.nutrition_per_portion.fat_g}g, carbs {s.recipe.nutrition_per_portion.carb_g}g, fibre {s.recipe.nutrition_per_portion.fibre_g}g</span>
+                                {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small"> ({s.recipe.nutrition.notes.join('; ')})</span>}
+                                {s.recipe.nutrition.approx_used && <span className="muted small"> (includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand)</span>}
+                              </span>
+                            ) : (
+                              <span className="muted">nutrition not shown - {s.recipe.nutrition && s.recipe.nutrition.ineligible_reasons && s.recipe.nutrition.ineligible_reasons.length > 0 ? s.recipe.nutrition.ineligible_reasons[0] : 'source is missing critical quantities'}</span>
+                            )}
                             {s.recipe.ingredients && s.recipe.ingredients.length > 0 && (
                               <details className="plan-ing"><summary>Ingredients (as stated in source)</summary>
                                 <ul>{s.recipe.ingredients.map((line: string, i: number) => <li key={i}>{line}</li>)}</ul>

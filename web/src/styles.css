@@ -159,3 +159,6 @@ a.rowtitle:hover { color:var(--leaf); }
 .plan-slot-body { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 .plan-ing { width: 100%; font-size: 0.9em; }
 .plan-ing ul { margin: 4px 0 4px 18px; list-style: disc; }
+.plan-nutrition { display: block; margin: 2px 0; font-size: 13px; }
+.plan-nutrition-batch { display: block; }
+.plan-nutrition-portion { display: block; color: #444; }
