@@ -456,7 +456,7 @@ export default function App() {
         <div className="wrap">
           <h1>Easy Recipe Library</h1>
           <div className={dataMode === 'demo' ? 'modebadge demo' : 'modebadge live'}>
-            {dataMode === 'demo' ? 'Recipe copy as of 27 Oct 2026 (not live) - saves/history reset on restart' : 'LIVE - your Google Sheet'}
+            {dataMode === 'demo' ? 'Recipe copy as of 27 Oct 2026 (not live) - saves/history reset on restart' : dataMode === 'pg' ? 'LIVE - your recipe database' : 'LIVE - your Google Sheet'}
           </div>
         </div>
       </header>
