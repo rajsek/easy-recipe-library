@@ -841,9 +841,12 @@ export default function App() {
                 <ul>{(plan.assumptions || []).map((a: string, i: number) => <li key={i}>{a}</li>)}</ul>
                 <p className="muted">{plan.source_note}</p>
               </details>
-              {plan.days_plan.map((d: any) => (
-                <div key={d.date} className="plan-day">
-                  <h3>{d.weekday}, {d.date}</h3>
+              {plan.days_plan.map((d: any, di: number) => (
+                <details key={d.date} className="plan-day" open={di === 0}>
+                  <summary className="plan-day-summary">
+                    <span className="plan-day-title">{d.weekday}, {d.date}</span>
+                    <span className="plan-day-compact muted">{d.slots.map((s: any) => (s.recipe ? s.recipe.name : null)).filter(Boolean).join(' · ')}</span>
+                  </summary>
                   <ul>
                     {d.slots.map((s: any) => (
                       <li key={s.slot} className="plan-slot">
@@ -881,7 +884,7 @@ export default function App() {
                       </li>
                     ))}
                   </ul>
-                </div>
+                </details>
               ))}
             </>)}
           </section>

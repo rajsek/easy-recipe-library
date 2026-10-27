@@ -162,3 +162,12 @@ a.rowtitle:hover { color:var(--leaf); }
 .plan-nutrition { display: block; margin: 2px 0; font-size: 13px; }
 .plan-nutrition-batch { display: block; }
 .plan-nutrition-portion { display: block; color: #444; }
+.plan-day { border-top: 1px solid #ddd; padding: 4px 0 8px; }
+.plan-day-summary { cursor: pointer; list-style: none; padding: 6px 0; }
+.plan-day-summary::-webkit-details-marker { display: none; }
+.plan-day-summary::before { content: '▸ '; color: #666; }
+.plan-day[open] > .plan-day-summary::before { content: '▾ '; }
+.plan-day-title { font-weight: 700; font-size: 15px; }
+.plan-day-compact { display: block; font-size: 12.5px; margin-top: 2px; line-height: 1.35; }
+.plan-day[open] > .plan-day-summary .plan-day-compact { display: none; }
+.plan-day ul { margin: 4px 0 4px 18px; padding: 0; }
