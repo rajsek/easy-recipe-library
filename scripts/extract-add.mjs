@@ -36,6 +36,7 @@ const rows = JSON.parse(readFileSync(file, 'utf8'));
 const sql = neon(url);
 
 const report = {};
+let statusFlipped = 0;
 for (const [table, cols] of Object.entries(COLS)) {
   const list = Array.isArray(rows[table]) ? rows[table] : [];
   let inserted = 0, skipped = 0;
@@ -50,13 +51,28 @@ for (const [table, cols] of Object.entries(COLS)) {
     } else {
       exists = (await sql.query('SELECT 1 FROM rawextracts WHERE video_id=$1 LIMIT 1', [r.video_id || ''])).length > 0;
     }
-    if (exists) { skipped++; continue; }
-    if (!dryRun) {
-      const ph = cols.map((_, i) => '$' + (i + 1)).join(',');
-      await sql.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${ph})`, vals);
+    if (exists) { skipped++; }
+    else {
+      if (!dryRun) {
+        const ph = cols.map((_, i) => '$' + (i + 1)).join(',');
+        await sql.query(`INSERT INTO ${table} (${cols.join(',')}) VALUES (${ph})`, vals);
+      }
+      inserted++;
     }
-    inserted++;
+    // Status parity (Sheet-era behavior): a rawextract parsed into a recipe
+    // flips the video to parsed-to-recipe. Runs on insert AND on skip so a
+    // rerun after a partial failure still converges; the UPDATE itself is
+    // idempotent. Only when a recipes row verifiably exists for the video -
+    // conflict-hold or unparsed rows never flip. Unknown rows untouched.
+    if (table === 'rawextracts' && r.parse_status === 'parsed-to-recipe' && r.video_id && !dryRun) {
+      const hasCard = (await sql.query('SELECT 1 FROM recipes WHERE strpos(video_url, $1) > 0 LIMIT 1', [r.video_id])).length > 0;
+      if (hasCard) {
+        const u = await sql.query("UPDATE videos SET extraction_status='parsed-to-recipe', date_last_checked=$2 WHERE video_id=$1 AND extraction_status IS DISTINCT FROM 'parsed-to-recipe' RETURNING video_id", [r.video_id, r.extracted_at || new Date().toISOString().slice(0,10)]);
+        statusFlipped += u.length;
+      }
+    }
   }
   report[table] = { received: list.length, inserted, skipped };
+  if (table === 'rawextracts') report[table].statusFlipped = statusFlipped;
 }
 console.log(JSON.stringify({ dryRun, ...report }));
