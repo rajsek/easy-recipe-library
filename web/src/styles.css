@@ -154,3 +154,8 @@ a.rowtitle:hover { color:var(--leaf); }
 .plan-slot-name { display: inline-block; min-width: 74px; font-weight: 600; text-transform: capitalize; }
 .plan-vref { font-size: 0.88em; }
 .plan-sample-note { background: #fdf3e0; border: 1px solid #e8d9b0; border-radius: 6px; padding: 8px 10px; font-size: 0.92em; }
+.plan-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; }
+.plan-slot { align-items: flex-start; }
+.plan-slot-body { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.plan-ing { width: 100%; font-size: 0.9em; }
+.plan-ing ul { margin: 4px 0 4px 18px; list-style: disc; }

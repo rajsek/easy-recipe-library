@@ -22,6 +22,7 @@ export interface PlanCard {
   portion_assumption: string;   // visible assumption, never a proven yield
   composition: 'standalone' | 'side_only';
   staple_suggestion?: { text: string; note: string };
+  ingredients: string[];        // source ingredient lines, unmodified
 }
 
 /** Concrete staple pairing for side-only dishes. Standard portions, labeled
@@ -239,7 +240,8 @@ export function generatePlan(input: PlanInput): PlanResult {
           nutrition: estimateNutrition(r.ingredients),
           portion_assumption: `whole recipe treated as ${servings} portion(s) - assumption, not a stated yield`,
           composition: comp,
-          staple_suggestion: comp === 'side_only' ? stapleFor(r.name) : undefined };
+          staple_suggestion: comp === 'side_only' ? stapleFor(r.name) : undefined,
+          ingredients: String(r.ingredients || '').split(/\n+/).map((x) => x.trim()).filter(Boolean) };
       }
       const vrefs = vidPool[s].slice((used[s] * 2) % Math.max(1, vidPool[s].length), (used[s] * 2) % Math.max(1, vidPool[s].length) + 2);
       return { slot: s, recipe, video_refs: vrefs };

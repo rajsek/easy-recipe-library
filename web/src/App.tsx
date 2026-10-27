@@ -849,11 +849,20 @@ export default function App() {
                       <li key={s.slot} className="plan-slot">
                         <span className="plan-slot-name">{s.slot}</span>
                         {s.recipe ? (<>
-                          <a href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
-                          {s.recipe.partial && <span className="muted"> (partial)</span>}
-                          {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="muted"> - side dish; {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
-                          {' '}
-                          <span className="muted">nutrition estimate pending full ingredient/unit audit</span>
+                          {thumb(s.recipe.url) && <img className="plan-thumb" src={thumb(s.recipe.url)} alt="" loading="lazy" />}
+                          <span className="plan-slot-body">
+                            <a href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
+                            {s.recipe.partial && <span className="muted"> (partial)</span>}
+                            <span className="muted"> image: video preview, not a verified dish photo</span>
+                            {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="muted"> - side dish; {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
+                            {' '}
+                            <span className="muted">nutrition estimate pending full ingredient/unit audit</span>
+                            {s.recipe.ingredients && s.recipe.ingredients.length > 0 && (
+                              <details className="plan-ing"><summary>Ingredients (as stated in source)</summary>
+                                <ul>{s.recipe.ingredients.map((line: string, i: number) => <li key={i}>{line}</li>)}</ul>
+                              </details>
+                            )}
+                          </span>
                         </>) : <span className="muted">no extracted card for this slot yet</span>}
                         {s.video_refs.length > 0 && (
                           <span className="plan-vref"> or see video: {s.video_refs.map((v: any, i: number) => (
