@@ -214,3 +214,4 @@ a.rowtitle:hover { color:var(--leaf); }
 @media (max-width: 480px) {
   .plan-share-chips { display: flex; margin: 6px 0 0; flex-wrap: wrap; }
 }
+.unlock-err { color:#b91c1c; font-size:13px; margin:2px 0 8px; }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { taFilter, taNav, toggleSel } from './ta';
 import { sortedResults, type SortKey, type TimeBucket } from './result-sort';
+import { verifyToken } from './unlock';
 
 interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; duration_s?: string; diet: string; published: string; status: string; }
 interface VideoPage { videos: VideoItem[]; total: number; page: number; pages: number; page_size: number; }
@@ -45,7 +46,18 @@ async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> 
 function TokenGate({ onUnlock }: { onUnlock: (t: string, name: string) => void }) {
   const [name, setName] = useState(profileName);
   const [v, setV] = useState('');
-  const ok = name.trim().length > 0 && v.trim().length > 0;
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const ok = name.trim().length > 0 && v.trim().length > 0 && !busy;
+  async function submit() {
+    if (!ok) return;
+    setBusy(true); setErr('');
+    const check = await verifyToken(v.trim());
+    setBusy(false);
+    if (check === 'ok') onUnlock(v.trim(), name.trim());
+    else if (check === 'wrong') setErr('Wrong password - the app stays locked. Check you are using the current app password.');
+    else setErr('Could not reach the app to check the password - try again.');
+  }
   return (
     <main className="wrap">
       <div className="tokengate">
@@ -54,9 +66,10 @@ function TokenGate({ onUnlock }: { onUnlock: (t: string, name: string) => void }
         <input type="text" placeholder="Your name" value={name} autoComplete="off"
           onChange={(e) => setName(e.target.value)} />
         <input type="password" placeholder="App password" value={v}
-          onChange={(e) => setV(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && ok) onUnlock(v.trim(), name.trim()); }} />
-        <button className="btn primary" disabled={!ok} onClick={() => onUnlock(v.trim(), name.trim())}>Unlock</button>
+          onChange={(e) => { setV(e.target.value); setErr(''); }}
+          onKeyDown={(e) => { if (e.key === 'Enter') submit(); }} />
+        {err && <p className="unlock-err" role="alert">{err}</p>}
+        <button className="btn primary" disabled={!ok} onClick={submit}>{busy ? 'Checking...' : 'Unlock'}</button>
       </div>
     </main>
   );
