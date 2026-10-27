@@ -9,17 +9,17 @@ test('slotsFor maps meal types', () => {
   assert.deepEqual(slotsFor(''), ['lunch', 'dinner']);
 });
 
-test('estimateNutrition sums per serving with coverage', () => {
-  const e = estimateNutrition('200g paneer, 2 onions, 1 tbsp oil, 100g tomato', 2);
+test('estimateNutrition returns whole-recipe totals with coverage', () => {
+  const e = estimateNutrition('200g paneer, 2 onions, 1 tbsp oil, 100g tomato');
   assert.equal(e.unavailable, false);
-  // paneer 200g = 305*2, oil 7.5g=66, tomato 100g=19, onion 220g=106 => ~801/2
-  assert.ok(e.kcal > 350 && e.kcal < 450, `kcal ${e.kcal}`);
+  // whole recipe: paneer 200g=610, oil 7.5g=66, tomato 100g=19, onion 220g=106 => ~801
+  assert.ok(e.kcal > 750 && e.kcal < 860, `kcal ${e.kcal}`);
   assert.equal(e.coverage_pct, 100);
   assert.equal(e.approx_used, true); // oil
 });
 
 test('estimateNutrition unavailable when no quantities', () => {
-  const e = estimateNutrition('QUANTITY UNSPECIFIED IN SOURCE - paneer, onion, spices', 2);
+  const e = estimateNutrition('QUANTITY UNSPECIFIED IN SOURCE - paneer, onion, spices');
   assert.equal(e.unavailable, true);
 });
 
@@ -53,4 +53,13 @@ test('compositionFor flags side dishes vs standalone', () => {
   assert.equal(compositionFor('Ennai Kathirikai (brinjal kuzhambu)', 'Lunch'), 'side_only');
   assert.equal(compositionFor('Tomato Rice (thakkali sadam)', 'Lunch'), 'standalone');
   assert.equal(compositionFor('Besan Bread Toast', 'Breakfast'), 'standalone');
+});
+
+test('side_only slots get a concrete staple proposal', () => {
+  const recipes = [{ name: 'Vada Curry (Saidapet style, no tomato)', url: 'u', channel: 'c', diet: 'Veg', meal: 'Lunch', ingredients: '100g onion', partial: false }];
+  const plan = generatePlan({ recipes, videos: [], start: '2026-10-27', days: 1, lunchOtherDays: true, servings: 2 });
+  const lunch = plan.days_plan[0].slots.find(s => s.slot === 'lunch')!;
+  assert.equal(lunch.recipe?.composition, 'side_only');
+  assert.ok(lunch.recipe?.staple_suggestion?.text.includes('pair with'), JSON.stringify(lunch.recipe?.staple_suggestion));
+  assert.ok(lunch.recipe?.portion_assumption.includes('assumption'));
 });

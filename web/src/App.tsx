@@ -851,7 +851,7 @@ export default function App() {
                         {s.recipe ? (<>
                           <a href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
                           {s.recipe.partial && <span className="muted"> (partial)</span>}
-                          {s.recipe.composition === 'side_only' && <span className="muted"> - side dish; pair with a staple (rice, dosa, roti...)</span>}
+                          {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="muted"> - side dish; {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
                           {' '}
                           <span className="muted">nutrition estimate pending full ingredient/unit audit</span>
                         </>) : <span className="muted">no extracted card for this slot yet</span>}

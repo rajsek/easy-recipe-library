@@ -18,8 +18,22 @@ export interface NutritionEstimate {
 }
 export interface PlanCard {
   name: string; url: string; channel: string; diet: string; meal: string; partial: boolean;
-  nutrition: NutritionEstimate;
+  nutrition: NutritionEstimate; // whole-recipe totals, not per portion
+  portion_assumption: string;   // visible assumption, never a proven yield
   composition: 'standalone' | 'side_only';
+  staple_suggestion?: { text: string; note: string };
+}
+
+/** Concrete staple pairing for side-only dishes. Standard portions, labeled
+ *  as proposals - no recipe card and no health target behind them. */
+export function stapleFor(name: string): { text: string; note: string } | undefined {
+  const n = (name || '').toLowerCase();
+  const note = 'Standard portion proposal, not from the recipe card; staple nutrition not yet included.';
+  if (/kurma|kuruma/.test(n)) return { text: 'pair with idli x2 (~80 g) or dosa x1 (~90 g)', note };
+  if (/chutney|thogayal|thuvaiyal|podi/.test(n)) return { text: 'pair with idli x2 (~80 g) or dosa x1 (~90 g)', note };
+  if (/raita|gravy|masala|keema|bhurji/.test(n)) return { text: 'pair with roti x2 (~60 g) or rice 1 cup cooked (~150 g)', note };
+  if (/kuzhambu|sambar|rasam|kootu|gotsu|thokku/.test(n)) return { text: 'pair with steamed rice 1 cup cooked (~150 g)', note };
+  return { text: 'pair with a staple: rice 1 cup cooked (~150 g), roti x2, or dosa x1', note };
 }
 
 /** Dishes that are a side/gravy/dip, not a full meal - the plan must not
@@ -81,18 +95,22 @@ const REF_KEYS: [RegExp, string][] = [
   [/curry leaves|karuveppilai/i, 'curry_leaves'], [/ginger/i, 'ginger'], [/garlic/i, 'garlic'],
   [/turmeric/i, 'turmeric_powder'], [/cumin|jeera|jeeragam/i, 'cumin_seed'],
   [/tamarind|puli/i, 'tamarind_pulp'], [/jaggery|vellam/i, 'jaggery_cane'],
-  [/coconut/i, 'coconut_fresh'], [/jowar|sorghum|cholam/i, 'jowar'], [/raisins?|dry grapes/i, 'raisins_black'], [/peanuts?|ground ?nut|verkadalai|nilakadalai/i, 'peanut_groundnut'], [/cashew|kaju|munthiri/i, 'cashew'], [/almonds?|badam/i, 'almond'], [/khoa|khoya|mawa/i, 'khoa'],
+  [/coconut/i, 'coconut_fresh'], [/jowar|sorghum|cholam/i, 'jowar'], [/raisins?|dry grapes/i, 'raisins_black'], [/peanuts?|ground ?nut|verkadalai|nilakadalai/i, 'peanut_groundnut'], [/brinjal|kathirikai|eggplant|aubergine/i, 'brinjal_avg'], [/banana(?! leaf)/i, 'banana_ripe_poovam'], [/mint|pudina/i, 'mint_leaves'], [/sesame|gingelly seeds|\bellu\b/i, 'sesame_gingelly_black'], [/soy sauce|soya sauce/i, 'soy_sauce'], [/ketchup|catsup/i, 'ketchup'],
+  [/cheddar|cheese/i, 'cheddar'], [/sour cream/i, 'sour_cream'], [/\bcream\b/i, 'cream_heavy'],
+  [/tuna/i, 'tuna_canned'], [/bacon/i, 'bacon_cooked'], [/sausage/i, 'sausage_pork'],
+  [/cornflakes|corn flakes/i, 'corn_flakes'], [/sweet corn|corn kernels|\bcorn\b/i, 'sweet_corn'],
+  [/\bbread\b/i, 'bread_white'], [/cashew|kaju|munthiri/i, 'cashew'], [/almonds?|badam/i, 'almond'], [/khoa|khoya|mawa/i, 'khoa'],
   [/curd|yogurt|dahi|thayir/i, 'curd'], [/milk(?!maid)/i, 'milk_cow'],
   [/ghee|oil|vanaspati/i, 'oil_generic'],
   [/\brice\b|basmati|raw rice|boiled rice/i, 'rice_raw'],
 ];
 const UNIT_G: [RegExp, number][] = [
   [/\bkgs?\b/, 1000], [/\bgrams?\b|\bgms?\b|\bg\b/, 1], [/\bml\b/, 1], [/\blitres?\b|\bliters?\b|\bltr\b|\bl\b/, 1000],
-  [/tablespoons?|tbsp/, 7.5], [/teaspoons?|tsp/, 2.5], [/cups?/, 120], [/pinch/, 0.4], [/sprigs?/, 2], [/handful/, 25],
+  [/tablespoons?|tbsp/, 7.5], [/teaspoons?|tsp/, 2.5], [/pinch/, 0.4], [/sprigs?/, 2], [/handful/, 25],
 ];
 const COUNT_G: [RegExp, number][] = [
   [/onion/, 110], [/tomato/, 90], [/eggs?/, 50], [/capsicum/, 120], [/potato/, 150],
-  [/green chill/, 5], [/garlic/, 5], [/cashew/, 1.6], [/almond/, 1.2], [/lemon/, 45], [/banana leaf/, 20],
+  [/green chill/, 5], [/garlic/, 5], [/ginger/, 10], [/small piece coconut|piece of coconut|coconut piece/, 25], [/bananas?(?! leaf)/, 100], [/scoop/, 30], [/cashew/, 1.6], [/almond/, 1.2], [/lemon/, 45], [/banana leaf/, 20],
 ];
 const NUM = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)/;
 
@@ -101,12 +119,14 @@ function refKeyFor(text: string): string | null {
   return null;
 }
 
-/** Estimate one recipe card's nutrition per serving. Grams math only; no invented precision. */
-export function estimateNutrition(ingredients: string, servings: number): NutritionEstimate {
+/** Estimate one recipe card's WHOLE-RECIPE nutrition from stated ingredient
+ *  quantities. Grams math only; no invented precision, no invented yield. */
+export function estimateNutrition(ingredients: string, _servings?: number): NutritionEstimate {
   const zero: NutritionEstimate = { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fibre_g: 0, coverage_pct: 0, approx_used: false, unavailable: true };
   if (!ingredients || /QUANTITY UNSPECIFIED/i.test(ingredients) && !/\d/.test(ingredients)) return zero;
   let kcal = 0, p = 0, f = 0, c = 0, fib = 0, matchedG = 0, parsedG = 0, approx = false;
   for (const frag of ingredients.split(/[,\n;]| \+ | and /i)) {
+    if (/TO-CONFIRM/i.test(frag)) continue;
     const stripped = frag.replace(new RegExp('^\\s*' + NUM.source + '\\s*(kg|g|gm|gms|ml|l|ltr|tsp|tbsp|tablespoons?|teaspoons?|cups?|pinch|sprigs?|handful)?\\s*', 'i'), '');
     if (NEGLIGIBLE.test(stripped) || /\bwater\b/i.test(stripped) && !refKeyFor(stripped)) continue;
     const m = frag.match(NUM);
@@ -122,6 +142,10 @@ export function estimateNutrition(ingredients: string, servings: number): Nutrit
     const unitWord = um ? um[1].toLowerCase() : '';
     let unitMul = 0;
     for (const [re, mul] of UNIT_G) { if (re.test(unitWord) || re.test(rest.slice(0, 12))) { unitMul = mul; break; } }
+    if (!unitMul && /cups?/i.test(unitWord) || /^\s*cups?/i.test(rest)) {
+      // household cup: 240 ml for liquids, ~120 g for dry goods
+      unitMul = /milk|curd|yogurt|water|oil|buttermilk|cream|juice|dal(?!.*flour)|coconut milk|broth|stock/i.test(frag) ? 240 : 120;
+    }
     if (unitMul) grams = qty * unitMul;
     else {
       for (const [re, each] of COUNT_G) { if (re.test(frag)) { grams = qty * each; break; } }
@@ -138,10 +162,9 @@ export function estimateNutrition(ingredients: string, servings: number): Nutrit
     matchedG += grams;
   }
   if (matchedG === 0) return zero;
-  const div = Math.max(1, servings);
   return {
-    kcal: Math.round(kcal / div), protein_g: Math.round(p / div * 10) / 10, fat_g: Math.round(f / div * 10) / 10,
-    carb_g: Math.round(c / div * 10) / 10, fibre_g: Math.round(fib / div * 10) / 10,
+    kcal: Math.round(kcal), protein_g: Math.round(p * 10) / 10, fat_g: Math.round(f * 10) / 10,
+    carb_g: Math.round(c * 10) / 10, fibre_g: Math.round(fib * 10) / 10,
     coverage_pct: parsedG ? Math.round(matchedG / parsedG * 100) : 100, approx_used: approx, unavailable: false,
   };
 }
@@ -211,7 +234,12 @@ export function generatePlan(input: PlanInput): PlanResult {
       if (pool.length) {
         const r = pool[used[s] % pool.length];
         used[s] += 1;
-        recipe = { name: r.name, url: r.url, channel: r.channel, diet: r.diet, meal: r.meal, partial: !!r.partial, nutrition: estimateNutrition(r.ingredients, servings), composition: compositionFor(r.name, r.meal) };
+        const comp = compositionFor(r.name, r.meal);
+        recipe = { name: r.name, url: r.url, channel: r.channel, diet: r.diet, meal: r.meal, partial: !!r.partial,
+          nutrition: estimateNutrition(r.ingredients),
+          portion_assumption: `whole recipe treated as ${servings} portion(s) - assumption, not a stated yield`,
+          composition: comp,
+          staple_suggestion: comp === 'side_only' ? stapleFor(r.name) : undefined };
       }
       const vrefs = vidPool[s].slice((used[s] * 2) % Math.max(1, vidPool[s].length), (used[s] * 2) % Math.max(1, vidPool[s].length) + 2);
       return { slot: s, recipe, video_refs: vrefs };
@@ -222,7 +250,7 @@ export function generatePlan(input: PlanInput): PlanResult {
     start: input.start, days, servings, lunch_other_days: lunchOtherDays, days_plan: out,
     assumptions: [
       'SAMPLE MENU ONLY - not personalized: dietary needs, allergies and who is eating are not confirmed yet.',
-      `Servings (${servings}) is a sample, editable count - not a recommended portion.`,
+      `Nutrition totals, when shown, will be whole-recipe totals; 'portions' (currently ${servings}) is a visible division assumption, not a yield stated by any recipe or a health target.`,
       'Numeric nutrition is hidden until every card passes a full ingredient, unit-conversion, recipe-yield and serving audit; weight coverage alone can hide cooking oil or a missing staple, so partial sums are not shown.',
       'Video references below a slot are unextracted videos - reference pointers only, not recipe or nutrition claims.',
       'Lunch pattern: ' + (lunchOtherDays ? 'lunch every day (editable)' : 'no lunch on Monday, Wednesday, Friday; lunch on all other days (from the original request, editable)') + '.',

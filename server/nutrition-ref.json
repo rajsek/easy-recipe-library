@@ -161,6 +161,19 @@
    "curd",
    "butter",
    "sugar_white"
+  ],
+  "usda_entries": [
+   "soy_sauce",
+   "ketchup",
+   "cheddar",
+   "cream_heavy",
+   "sour_cream",
+   "tuna_canned",
+   "bacon_cooked",
+   "corn_flakes",
+   "bread_white",
+   "sausage_pork",
+   "sweet_corn"
   ]
  },
  "poha_rice_flakes": {
@@ -338,5 +351,133 @@
   "fat_g": 39.63,
   "carb_g": 17.27,
   "fibre_g": 10.38
+ },
+ "soy_sauce": {
+  "kcal": 53,
+  "protein_g": 8.14,
+  "fat_g": 0.57,
+  "carb_g": 4.93,
+  "fibre_g": 0.8,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Soy sauce made from soy and wheat (shoyu)"
+ },
+ "ketchup": {
+  "kcal": 101,
+  "protein_g": 1.04,
+  "fat_g": 0.1,
+  "carb_g": 27.4,
+  "fibre_g": 0.3,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Catsup"
+ },
+ "cheddar": {
+  "kcal": 410,
+  "protein_g": 24.2,
+  "fat_g": 33.8,
+  "carb_g": 2.13,
+  "fibre_g": 0.0,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Cheese, cheddar, sharp, sliced"
+ },
+ "cream_heavy": {
+  "kcal": 340,
+  "protein_g": 2.84,
+  "fat_g": 36.1,
+  "carb_g": 2.84,
+  "fibre_g": 0.0,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Cream, fluid, heavy whipping"
+ },
+ "sour_cream": {
+  "kcal": 198,
+  "protein_g": 2.44,
+  "fat_g": 19.4,
+  "carb_g": 4.63,
+  "fibre_g": 0.0,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Cream, sour, cultured"
+ },
+ "tuna_canned": {
+  "kcal": 86,
+  "protein_g": 19.4,
+  "fat_g": 0.96,
+  "carb_g": 0.0,
+  "fibre_g": 0.0,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Fish, tuna, light, canned in water, drained solids"
+ },
+ "bacon_cooked": {
+  "kcal": 548,
+  "protein_g": 35.7,
+  "fat_g": 43.3,
+  "carb_g": 1.35,
+  "fibre_g": 0.0,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Pork, cured, bacon, cooked, baked"
+ },
+ "corn_flakes": {
+  "kcal": 384,
+  "protein_g": 5.9,
+  "fat_g": 0.91,
+  "carb_g": 88.0,
+  "fibre_g": 2.7,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Cereals ready-to-eat, corn flakes, low sodium"
+ },
+ "bread_white": {
+  "kcal": 266,
+  "protein_g": 8.85,
+  "fat_g": 3.33,
+  "carb_g": 49.4,
+  "fibre_g": 2.7,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Bread, white, commercially prepared (includes soft bread crumbs)"
+ },
+ "sausage_pork": {
+  "kcal": 284,
+  "protein_g": 10.7,
+  "fat_g": 26.8,
+  "carb_g": 0.11,
+  "fibre_g": 0.1,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Sausage, pork, turkey, and beef, reduced sodium"
+ },
+ "sweet_corn": {
+  "kcal": 86,
+  "protein_g": 3.27,
+  "fat_g": 1.35,
+  "carb_g": 18.7,
+  "fibre_g": 2.0,
+  "source": "USDA FoodData Central SR Legacy April 2018 (public bulk download, fdc.nal.usda.gov), per 100g",
+  "usda_description": "Corn, sweet, yellow, raw"
+ },
+ "brinjal_avg": {
+  "kcal": 25,
+  "protein_g": 1.55,
+  "fat_g": 0.32,
+  "carb_g": 3.46,
+  "fibre_g": 3.91,
+  "note": "Mean of IFCT Brinjal-1..11 varieties (first proximate table)"
+ },
+ "banana_ripe_poovam": {
+  "kcal": 106,
+  "protein_g": 1.49,
+  "fat_g": 0.35,
+  "carb_g": 23.41,
+  "fibre_g": 2.33
+ },
+ "mint_leaves": {
+  "kcal": 37,
+  "protein_g": 4.66,
+  "fat_g": 0.65,
+  "carb_g": 2.39,
+  "fibre_g": 5.89
+ },
+ "sesame_gingelly_black": {
+  "kcal": 508,
+  "protein_g": 19.17,
+  "fat_g": 43.1,
+  "carb_g": 10.29,
+  "fibre_g": 17.16
  }
 }
