@@ -44,7 +44,7 @@ function TokenGate({ onUnlock }: { onUnlock: (t: string) => void }) {
 const TABS: [string, string][] = [
   ['pick', 'Pick for me'], ['recipes', 'Recipes'], ['snack', 'Snacks'],
   ['breakfast', 'Breakfast'], ['lunch/dinner', 'Sunday meals'], ['sweets', 'Sweets'],
-  ['all', 'All videos'], ['history', 'History'], ['comms', 'Comms']
+  ['all', 'All videos'], ['plan', 'Plan'], ['history', 'History'], ['comms', 'Comms']
 ];
 const INDEX_TABS = new Set(['snack', 'breakfast', 'lunch/dinner', 'sweets', 'all']);
 const HIST_STATES: [string, string][] = [
@@ -255,6 +255,10 @@ export default function App() {
   const [dataMode, setDataMode] = useState<string>('');
   const [locked, setLocked] = useState(false);
   const [videos, setVideos] = useState<VideoItem[] | null>(null);
+  const [plan, setPlan] = useState<any | null>(null);
+  const [planStart, setPlanStart] = useState<string>('');
+  const [planLunch, setPlanLunch] = useState<boolean>(true);
+  const [planServings, setPlanServings] = useState<number>(2);
   const [fch, setFch] = useState(''); const [fdiet, setFdiet] = useState(''); const [fq, setFq] = useState('');
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -322,6 +326,18 @@ export default function App() {
     apiFetch('/api/videos?' + params, {signal: controller.signal}).then((r) => { if (!r.ok) throw new Error('Video search failed'); return r.json(); }).then(rows => { if (!controller.signal.aborted) setVideos(rows); }).catch(() => { if (!controller.signal.aborted) setVideos([]); });
     return () => controller.abort();
   }, [tab, fch, fdiet, fq, resultSort]);
+
+  useEffect(() => {
+    if (tab !== 'plan') return;
+    setPlan(null);
+    const params = new URLSearchParams();
+    if (planStart) params.set('start', planStart);
+    params.set('lunch', planLunch ? '1' : '0');
+    params.set('servings', String(planServings));
+    const controller = new AbortController();
+    apiFetch('/api/plan?' + params, {signal: controller.signal}).then((r) => { if (!r.ok) throw new Error('Plan failed'); return r.json(); }).then(j => { if (!controller.signal.aborted) setPlan(j); }).catch(() => { if (!controller.signal.aborted) setPlan({error: true}); });
+    return () => controller.abort();
+  }, [tab, planStart, planLunch, planServings]);
 
   // Ingredient typeahead: canonical chips from the verified library vocabulary
   // (fetched once from /api/ingredients - zero AI calls per keystroke). Unknown
@@ -808,6 +824,49 @@ export default function App() {
           </section>
         )}
 
+        {tab === 'plan' && (
+          <section className="panel">
+            <h2>30-day plan</h2>
+            <div className="plan-controls">
+              <label>Start date <input type="date" value={planStart} onChange={(e) => setPlanStart(e.target.value)} /></label>
+              <label><input type="checkbox" checked={planLunch} onChange={(e) => setPlanLunch(e.target.checked)} /> Lunch every day</label>
+              <label>Servings <input type="number" min={1} max={10} value={planServings} onChange={(e) => setPlanServings(parseInt(e.target.value) || 2)} /></label>
+            </div>
+            {!plan && <p className="muted">Building plan...</p>}
+            {plan && plan.error && <p className="muted">Plan could not be generated right now.</p>}
+            {plan && !plan.error && (<>
+              <details className="plan-assumptions"><summary>How this plan and its nutrition estimates work</summary>
+                <ul>{(plan.assumptions || []).map((a: string, i: number) => <li key={i}>{a}</li>)}</ul>
+                <p className="muted">{plan.source_note}</p>
+              </details>
+              {plan.days_plan.map((d: any) => (
+                <div key={d.date} className="plan-day">
+                  <h3>{d.weekday}, {d.date}</h3>
+                  <ul>
+                    {d.slots.map((s: any) => (
+                      <li key={s.slot} className="plan-slot">
+                        <span className="plan-slot-name">{s.slot}</span>
+                        {s.recipe ? (<>
+                          <a href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
+                          {s.recipe.partial && <span className="muted"> (partial)</span>}
+                          {' '}
+                          {s.recipe.nutrition.unavailable
+                            ? <span className="muted">estimate unavailable</span>
+                            : <span className="muted">~{s.recipe.nutrition.kcal} kcal/serving (covers ~{s.recipe.nutrition.coverage_pct}% of stated ingredients{s.recipe.nutrition.approx_used ? ', approx.' : ''})</span>}
+                        </>) : <span className="muted">no extracted card for this slot yet</span>}
+                        {s.video_refs.length > 0 && (
+                          <span className="plan-vref"> or see video: {s.video_refs.map((v: any, i: number) => (
+                            <a key={i} href={v.url} target="_blank" rel="noreferrer">{v.title}</a>
+                          )).reduce((prev: any, curr: any) => [prev, ', ', curr])} <span className="muted">(reference only - not extracted)</span></span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </>)}
+          </section>
+        )}
         {tab === 'history' && (
           history.length === 0 ? <p className="muted">Nothing saved, suggested or cooked yet.</p>
             : HIST_STATES.map(([st, label]) => {

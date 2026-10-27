@@ -1,0 +1,196 @@
+{
+ "rice_raw": {
+  "kcal": 354,
+  "protein_g": 9.16,
+  "fat_g": 1.24,
+  "carb_g": 74.8,
+  "fibre_g": 4.43
+ },
+ "bengal_gram_dal": {
+  "kcal": 329,
+  "protein_g": 21.55,
+  "fat_g": 5.31,
+  "carb_g": 46.72,
+  "fibre_g": 15.15
+ },
+ "green_gram_dal": {
+  "kcal": 326,
+  "protein_g": 23.88,
+  "fat_g": 1.35,
+  "carb_g": 52.59,
+  "fibre_g": 9.37
+ },
+ "tomato": {
+  "kcal": 19,
+  "protein_g": 0.76,
+  "fat_g": 0.25,
+  "carb_g": 3.2,
+  "fibre_g": 1.58
+ },
+ "onion_big": {
+  "kcal": 48,
+  "protein_g": 1.5,
+  "fat_g": 0.24,
+  "carb_g": 9.56,
+  "fibre_g": 2.45
+ },
+ "potato": {
+  "kcal": 70,
+  "protein_g": 1.54,
+  "fat_g": 0.23,
+  "carb_g": 14.89,
+  "fibre_g": 1.71
+ },
+ "capsicum": {
+  "kcal": 16,
+  "protein_g": 1.11,
+  "fat_g": 0.34,
+  "carb_g": 1.84,
+  "fibre_g": 2.06
+ },
+ "carrot": {
+  "kcal": 33,
+  "protein_g": 0.95,
+  "fat_g": 0.47,
+  "carb_g": 5.55,
+  "fibre_g": 4.18
+ },
+ "french_beans": {
+  "kcal": 24,
+  "protein_g": 2.49,
+  "fat_g": 0.26,
+  "carb_g": 2.68,
+  "fibre_g": 4.38
+ },
+ "cauliflower": {
+  "kcal": 43,
+  "protein_g": 3.42,
+  "fat_g": 1.38,
+  "carb_g": 3.69,
+  "fibre_g": 5.6
+ },
+ "coriander_leaves": {
+  "kcal": 31,
+  "protein_g": 3.52,
+  "fat_g": 0.7,
+  "carb_g": 1.93,
+  "fibre_g": 4.66
+ },
+ "curry_leaves": {
+  "kcal": 64,
+  "protein_g": 7.41,
+  "fat_g": 1.06,
+  "carb_g": 4.51,
+  "fibre_g": 16.83
+ },
+ "ginger": {
+  "kcal": 55,
+  "protein_g": 2.22,
+  "fat_g": 0.85,
+  "carb_g": 8.97,
+  "fibre_g": 5.36
+ },
+ "garlic": {
+  "kcal": 124,
+  "protein_g": 6.92,
+  "fat_g": 0.16,
+  "carb_g": 21.93,
+  "fibre_g": 5.22
+ },
+ "turmeric_powder": {
+  "kcal": 281,
+  "protein_g": 7.66,
+  "fat_g": 5.03,
+  "carb_g": 49.22,
+  "fibre_g": 21.38
+ },
+ "cumin_seed": {
+  "kcal": 304,
+  "protein_g": 13.91,
+  "fat_g": 16.64,
+  "carb_g": 22.62,
+  "fibre_g": 30.35
+ },
+ "tamarind_pulp": {
+  "kcal": 71,
+  "protein_g": 5.84,
+  "fat_g": 0.49,
+  "carb_g": 10.04,
+  "fibre_g": 10.7
+ },
+ "jaggery_cane": {
+  "kcal": 0,
+  "protein_g": 1.85,
+  "fat_g": 0.16,
+  "carb_g": 85.54,
+  "fibre_g": 84.87
+ },
+ "paneer": {
+  "kcal": 305,
+  "protein_g": 18.86,
+  "fat_g": 24.78,
+  "carb_g": 2.41,
+  "fibre_g": 0
+ },
+ "milk_cow": {
+  "kcal": 73,
+  "protein_g": 3.26,
+  "fat_g": 4.48,
+  "carb_g": 4.94,
+  "fibre_g": 0
+ },
+ "milk_buffalo": {
+  "kcal": 107,
+  "protein_g": 3.68,
+  "fat_g": 6.58,
+  "carb_g": 8.39,
+  "fibre_g": 0
+ },
+ "khoa": {
+  "kcal": 316,
+  "protein_g": 16.34,
+  "fat_g": 20.62,
+  "carb_g": 16.53,
+  "fibre_g": 0
+ },
+ "_meta": {
+  "source": "Indian Food Composition Tables 2017, ICMR-NIN Hyderabad (per 100g edible portion; energy kJ converted to kcal /4.184)",
+  "extracted": "2026-10-27",
+  "approximations": [
+   "oil_generic",
+   "curd"
+  ]
+ },
+ "poha_rice_flakes": {
+  "kcal": 354,
+  "protein_g": 7.44,
+  "fat_g": 1.14,
+  "carb_g": 76.75,
+  "fibre_g": 3.46
+ },
+ "coconut_fresh": {
+  "kcal": 409,
+  "protein_g": 3.84,
+  "fat_g": 41.38,
+  "carb_g": 6.3,
+  "fibre_g": 10.42
+ },
+ "oil_generic": {
+  "kcal": 884,
+  "protein_g": 0,
+  "fat_g": 99.9,
+  "carb_g": 0,
+  "fibre_g": 0,
+  "approx": true,
+  "note": "Standard pure refined oil composition (99.9% fat, 3700 kJ/100g). IFCT 2017 oils table present but its proximate row was not machine-extractable from the PDF text."
+ },
+ "curd": {
+  "kcal": 73,
+  "protein_g": 3.26,
+  "fat_g": 4.48,
+  "carb_g": 4.94,
+  "fibre_g": 0,
+  "approx": true,
+  "note": "Approximated from IFCT whole cow milk (fermentation changes macros little at this precision)."
+ }
+}

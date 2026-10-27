@@ -13,6 +13,7 @@ import express from 'express';
 import { videoMatchesDiet } from './video-diet.js';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { generatePlan } from './mealplan.js';
 import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
@@ -83,6 +84,19 @@ app.get('/api/ingredients', async (_req, res) => res.json({ ingredients: typeahe
 
 // Dish-filter typeahead vocabulary: dish identities of verified cards.
 app.get('/api/dishes', async (_req, res) => res.json({ dishes: dishVocab(await getRecipeRows() as any) }));
+
+// 30-day meal plan, generated on demand from the current DB cards
+app.get('/api/plan', async (req, res) => {
+  const start = String(req.query.start || '').match(/^\d{4}-\d{2}-\d{2}$/) ? String(req.query.start) : new Date().toISOString().slice(0, 10);
+  const lunch = req.query.lunch === undefined ? true : !/^(0|false|no)$/i.test(String(req.query.lunch));
+  const servings = Math.min(Math.max(parseInt(String(req.query.servings || '2'), 10) || 2, 1), 10);
+  const [recipes, videos] = await Promise.all([getRecipes(), getVideos({})]);
+  res.json(generatePlan({
+    recipes: recipes.map((r: any) => ({ name: r.name, url: r.url, channel: r.channel, diet: r.diet || '', meal: r.meal || '', ingredients: r.ingredients || '', partial: !!r.partial })),
+    videos: (videos as any[]).map((v) => ({ id: v.id, title: v.title, url: v.url, channel: v.channel, category: v.category || '', status: v.status || '' })),
+    start, days: 30, lunchOtherDays: lunch, servings,
+  }));
+});
 
 app.get('/api/history', async (_req, res) => {
   const h = await getHistory();
