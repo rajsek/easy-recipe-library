@@ -154,11 +154,18 @@ test('salt does not break the eligibility gate or macros', () => {
   assert.equal(f.eligible, true, f.ineligible_reasons.join(' | '));
 });
 
-test('foods without USDA micro data are excluded from sums and noted', () => {
-  const e = estimateNutrition('50g jaggery, 200g paneer');
+test('foods without verified micro data are excluded from sums and noted', () => {
+  const e = estimateNutrition('100g maida, 200g paneer');
   assert.equal(e.eligible, true, e.ineligible_reasons.join(' | '));
   assert.ok(e.minerals, 'minerals still present from paneer');
-  assert.ok(e.micro_gaps.includes('jaggery_cane'), JSON.stringify(e.micro_gaps));
+  assert.ok(e.micro_gaps.includes('maida_refined_flour'), JSON.stringify(e.micro_gaps));
+});
+
+test('jaggery micros come from IFCT 2017 (USDA has no cane-jaggery entry)', () => {
+  const e = estimateNutrition('50g jaggery, 200g paneer');
+  assert.equal(e.eligible, true, e.ineligible_reasons.join(' | '));
+  assert.deepEqual(e.micro_gaps, []);
+  assert.ok(e.minerals && e.minerals.ca_mg > 0, JSON.stringify(e.minerals));
 });
 
 test('unmatched cards have no minerals and withheld sodium', () => {

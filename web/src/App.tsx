@@ -121,14 +121,16 @@ function ShareCalc({ n }: { n: ShareNut }) {
   );
 }
 
-function MineralLine({ n }: { n: ShareNut & { sodium_note?: string; micro_gaps?: string[] } }) {
+function MineralLine({ n }: { n: ShareNut & { sodium_note?: string; micro_gaps?: string[]; approx_used?: boolean } }) {
   if (!n.minerals) return null;
+  const gaps = n.micro_gaps || [];
+  const partial = gaps.length > 0;
   return (
     <span className="plan-minerals muted small">
-      <b>Minerals (whole batch, ingredient-sum estimate - raw ingredients, cooking/leaching losses not modeled):</b> calcium {n.minerals.ca_mg}mg, iron {n.minerals.fe_mg}mg, magnesium {n.minerals.mg_mg}mg, potassium {n.minerals.k_mg}mg, zinc {n.minerals.zn_mg}mg
+      <b>Minerals (whole batch{partial ? ', partial - known ingredients only' : ''}, ingredient-sum estimate - raw ingredients, cooking/leaching losses not modeled):</b> calcium {n.minerals.ca_mg}mg, iron {n.minerals.fe_mg}mg, magnesium {n.minerals.mg_mg}mg, potassium {n.minerals.k_mg}mg, zinc {n.minerals.zn_mg}mg
       {n.sodium_mg != null ? <>, sodium {n.sodium_mg}mg</> : null}.
-      {' '}{n.sodium_note}. Vitamins: unavailable (cooking retention evidence insufficient).
-      {n.micro_gaps && n.micro_gaps.length > 0 ? ` Excludes ${n.micro_gaps.map(g => g.replace(/_/g, ' ')).join(', ')} - no USDA micro data.` : ''}
+      {' '}{n.sodium_note}. Vitamins: unavailable (cooking retention evidence insufficient).{' '}
+      {partial ? ` Excludes ${gaps.map(g => g.replace(/_/g, ' ')).join(', ')} - no verified micro data.` : ''}
     </span>
   );
 }
@@ -1035,10 +1037,13 @@ export default function App() {
                               {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="plan-caption muted">side dish - {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
                               {s.recipe.nutrition && s.recipe.nutrition.eligible ? (
                                 <span className="plan-nutrition">
-                                  <span className="plan-nutrition-batch"><b>Whole recipe batch (ingredient-sum estimate - raw ingredients, cooking/leaching losses not modeled):</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
-                                  <MineralLine n={s.recipe.nutrition} />
-                                  {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small"> ({s.recipe.nutrition.notes.join('; ')})</span>}
-                                  {s.recipe.nutrition.approx_used && <span className="muted small"> (includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand)</span>}
+                                  <span className="plan-nutrition-batch"><b>Whole recipe batch (ingredient-sum estimate):</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
+                                  <details className="plan-nut-details"><summary>Nutrition details</summary>
+                                    <span className="muted small">All numbers are ingredient-sum estimates from raw ingredients; cooking/leaching losses not modeled. </span>
+                                    <MineralLine n={s.recipe.nutrition} />
+                                    {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small">{s.recipe.nutrition.notes.join('; ')}</span>}
+                                    {s.recipe.nutrition.approx_used && <span className="muted small">Includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand.</span>}
+                                  </details>
                                   <ShareCalc n={s.recipe.nutrition} />
                                 </span>
                               ) : (

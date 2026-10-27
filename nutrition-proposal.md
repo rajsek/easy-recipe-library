@@ -24,16 +24,22 @@ Coverage % is reported internally but never used as the gate.
 - Five minerals per eligible card (calcium, iron, magnesium, potassium, zinc) as
   RAW-INGREDIENT SUMS from USDA FDC per-100g values, labeled in the UI as an
   ingredient-sum estimate with cooking/leaching losses not modeled.
-- Provenance: 34 of 71 reference entries carry micros, each with a micro_source
-  field naming the exact USDA FDC id, data type (SR Legacy / FNDDS) and food.
-  Every matched ingredient on the 9 eligible cards is covered except jaggery
-  (Sambar Sadam): no USDA FDC entry for cane jaggery exists, so the card notes
-  its exclusion instead of estimating. Curry leaves are quantity-negligible and
-  never enter the sums.
-- Sodium is shown ONLY when the source quantifies its salt (e.g. "1 tsp salt" ->
-  6 g at USDA FDC 173468 portions, 38800 mg Na/100 g + ingredient sodium). Cards
-  whose source has no quantified salt (Navratan Pulao, Sambar Sadam) withhold
-  sodium entirely rather than estimate; the UI says why.
+- Provenance: 35 of 71 reference entries carry micros, each with a micro_source
+  field. 34 come from USDA FDC (SR Legacy / FNDDS). Jaggery uses IFCT 2017
+  (NIN/ICMR, Table 5, food I001 "Jaggery, cane (Saccharum officinarum)", N=6
+  regional composite samples, mg/100g, https://www.nin.res.in/ebooks/IFCT2017.pdf)
+  after primary-table verification - a search hit alone would not have been
+  enough (a secondary site and the book's own historical intro quote a stale
+  11.4 mg iron figure; the 2017 analyzed value is 4.63 mg). Every matched
+  ingredient on the 9 eligible cards is now covered. Curry leaves are
+  quantity-negligible and never enter the sums. If a future recipe adds a
+  matched ingredient with no verified micro entry, that card's mineral line is
+  labeled "partial - known ingredients only" and names the exclusion.
+- Sodium is shown ONLY when the source quantifies its salt (e.g. "1 tsp salt",
+  converted with reference gram weights - 6 g/tsp from USDA FDC 173468 portion
+  data - plus raw ingredient sodium; the UI says exactly that, not "measured").
+  Cards whose source has no quantified salt (Navratan Pulao, Sambar Sadam)
+  withhold sodium entirely; the UI says why.
 - Vitamins: not estimated anywhere - cooking retention evidence is insufficient,
   the UI says "Vitamins: unavailable (cooking retention evidence insufficient)".
 

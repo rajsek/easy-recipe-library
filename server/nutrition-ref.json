@@ -256,7 +256,14 @@
   "protein_g": 1.85,
   "fat_g": 0.16,
   "carb_g": 85.54,
-  "fibre_g": 84.87
+  "fibre_g": 84.87,
+  "ca_mg": 107,
+  "fe_mg": 4.63,
+  "mg_mg": 115,
+  "k_mg": 488,
+  "zn_mg": 0.45,
+  "na_mg": 25.38,
+  "micro_source": "IFCT 2017 (NIN/ICMR) Table 5, food I001 Jaggery, cane (Saccharum officinarum), N=6 composite, mg/100g"
  },
  "paneer": {
   "kcal": 305,

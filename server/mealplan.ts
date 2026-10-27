@@ -274,7 +274,7 @@ export function estimateNutrition(ingredients: string, _servings?: number): Nutr
   // a cooked dish's sodium), so it is withheld rather than estimated.
   const sodiumKnown = saltG > 0 && !saltUnquantified;
   const sodiumNote = sodiumKnown
-    ? 'includes quantified salt + ingredient sodium (raw values)'
+    ? 'salt quantity from source, converted with reference gram weights (USDA FDC 173468), plus raw ingredient sodium'
     : saltUnquantified ? 'sodium withheld - source mentions salt without a quantity' : 'sodium withheld - no salt quantified in source';
   return {
     eligible: ineligible.length === 0, ineligible_reasons: ineligible,
