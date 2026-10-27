@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateNutrition, slotsFor, generatePlan } from './mealplan.js';
+import { estimateNutrition, slotsFor, generatePlan, compositionFor } from './mealplan.js';
 
 test('slotsFor maps meal types', () => {
   assert.deepEqual(slotsFor('Breakfast'), ['breakfast']);
@@ -46,4 +46,11 @@ test('generatePlan excludes lunch Mon/Wed/Fri when lunchOtherDays=false', () => 
   const plan = generatePlan({ recipes, videos: [], start: '2026-10-27', days: 7, lunchOtherDays: false, servings: 2 });
   const lunches = plan.days_plan.filter(d => d.slots.some(s => s.slot === 'lunch'));
   assert.deepEqual(lunches.map(l => l.weekday), ['Tuesday', 'Thursday', 'Saturday', 'Sunday']);
+});
+
+test('compositionFor flags side dishes vs standalone', () => {
+  assert.equal(compositionFor('Vada Curry (Saidapet style, no tomato)', 'Lunch'), 'side_only');
+  assert.equal(compositionFor('Ennai Kathirikai (brinjal kuzhambu)', 'Lunch'), 'side_only');
+  assert.equal(compositionFor('Tomato Rice (thakkali sadam)', 'Lunch'), 'standalone');
+  assert.equal(compositionFor('Besan Bread Toast', 'Breakfast'), 'standalone');
 });

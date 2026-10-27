@@ -158,7 +158,9 @@
   "extracted": "2026-10-27",
   "approximations": [
    "oil_generic",
-   "curd"
+   "curd",
+   "butter",
+   "sugar_white"
   ]
  },
  "poha_rice_flakes": {
@@ -192,5 +194,149 @@
   "fibre_g": 0,
   "approx": true,
   "note": "Approximated from IFCT whole cow milk (fermentation changes macros little at this precision)."
+ },
+ "urad_dal_black_gram": {
+  "kcal": 324,
+  "protein_g": 23.06,
+  "fat_g": 1.69,
+  "carb_g": 51.0,
+  "fibre_g": 11.93
+ },
+ "toor_dal_red_gram": {
+  "kcal": 331,
+  "protein_g": 21.7,
+  "fat_g": 1.56,
+  "carb_g": 55.23,
+  "fibre_g": 9.06
+ },
+ "black_pepper": {
+  "kcal": 217,
+  "protein_g": 10.12,
+  "fat_g": 2.74,
+  "carb_g": 36.22,
+  "fibre_g": 33.16
+ },
+ "mustard_seeds": {
+  "kcal": 510,
+  "protein_g": 19.51,
+  "fat_g": 40.19,
+  "carb_g": 16.8,
+  "fibre_g": 14.1
+ },
+ "coriander_seeds": {
+  "kcal": 269,
+  "protein_g": 10.66,
+  "fat_g": 17.47,
+  "carb_g": 12.98,
+  "fibre_g": 44.81
+ },
+ "fenugreek_seeds": {
+  "kcal": 235,
+  "protein_g": 25.41,
+  "fat_g": 5.72,
+  "carb_g": 10.57,
+  "fibre_g": 47.55
+ },
+ "cloves": {
+  "kcal": 187,
+  "protein_g": 5.86,
+  "fat_g": 8.41,
+  "carb_g": 18.73,
+  "fibre_g": 34.52
+ },
+ "cardamom_green": {
+  "kcal": 255,
+  "protein_g": 8.1,
+  "fat_g": 2.6,
+  "carb_g": 47.76,
+  "fibre_g": 23.1
+ },
+ "green_chillies": {
+  "kcal": 42,
+  "protein_g": 2.36,
+  "fat_g": 0.72,
+  "carb_g": 5.86,
+  "fibre_g": 4.77
+ },
+ "button_mushroom": {
+  "kcal": 27,
+  "protein_g": 3.68,
+  "fat_g": 0.42,
+  "carb_g": 1.98,
+  "fibre_g": 3.11
+ },
+ "sooji_semolina": {
+  "kcal": 334,
+  "protein_g": 11.38,
+  "fat_g": 0.74,
+  "carb_g": 68.43,
+  "fibre_g": 9.72
+ },
+ "maida_refined_flour": {
+  "kcal": 352,
+  "protein_g": 10.36,
+  "fat_g": 0.76,
+  "carb_g": 74.27,
+  "fibre_g": 2.76
+ },
+ "atta_whole_wheat_flour": {
+  "kcal": 320,
+  "protein_g": 10.57,
+  "fat_g": 1.53,
+  "carb_g": 64.17,
+  "fibre_g": 11.36
+ },
+ "egg_chicken_whole_raw": {
+  "kcal": 135,
+  "protein_g": 13.28,
+  "fat_g": 9.15,
+  "carb_g": 0.0,
+  "fibre_g": 0
+ },
+ "red_chilli_dry": {
+  "kcal": 237,
+  "protein_g": 12.69,
+  "fat_g": 6.4,
+  "carb_g": 29.46,
+  "fibre_g": 31.15
+ },
+ "butter": {
+  "kcal": 717,
+  "protein_g": 0.9,
+  "fat_g": 81.0,
+  "carb_g": 0.1,
+  "fibre_g": 0,
+  "approx": true,
+  "note": "Standard dairy butter composition (~81% fat). IFCT 2017 butter/ghee proximate rows were not machine-extractable from the PDF text."
+ },
+ "sugar_white": {
+  "kcal": 400,
+  "protein_g": 0,
+  "fat_g": 0,
+  "carb_g": 99.9,
+  "fibre_g": 0,
+  "approx": true,
+  "note": "Standard white sugar composition (~100% sucrose). IFCT 2017 sugars table lists jaggery and sugarcane juice only in the extractable text."
+ },
+ "jowar": {
+  "kcal": 334,
+  "protein_g": 9.97,
+  "fat_g": 1.73,
+  "carb_g": 67.68,
+  "fibre_g": 10.22
+ },
+ "raisins_black": {
+  "kcal": 306,
+  "protein_g": 2.57,
+  "fat_g": 0.34,
+  "carb_g": 71.29,
+  "fibre_g": 3.92
+ },
+ "peanut_groundnut": {
+  "kcal": 520,
+  "protein_g": 23.65,
+  "fat_g": 39.63,
+  "carb_g": 17.27,
+  "fibre_g": 10.38
  }
 }

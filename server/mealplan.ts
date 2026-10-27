@@ -19,6 +19,20 @@ export interface NutritionEstimate {
 export interface PlanCard {
   name: string; url: string; channel: string; diet: string; meal: string; partial: boolean;
   nutrition: NutritionEstimate;
+  composition: 'standalone' | 'side_only';
+}
+
+/** Dishes that are a side/gravy/dip, not a full meal - the plan must not
+ *  present them as a complete slot on their own. */
+const SIDE_ONLY = /kuzhambu|kootu(?! sadam)|curry|kurma|chutney|thogayal|thuvaiyal|podi|gravy|raita|pachadi|dip|sambar(?! sadam)|rasam(?! sadam)|thokku|pickle|masala(?! (rice|dosa|idli))/i;
+const STAPLE = /rice|sadam|dosa|idli|idly|pongal|upma|roti|chapati|paratha|parotta|bread|toast|pancake|biriyani|biryani|pulao|khichdi|pasta|noodles|vermicelli|semiya|puttu|idiyappam|appam|poha|aval|oats|porridge|sandwich|pizza|bun|pav|roll|wrap/i;
+const SNACKY = /salad|soup|kebab|cutlet|vada(?!\s*curry)|bajji|pakoda|pakora|bonda|paniyaram|kheer|payasam|halwa|cake|sweet|poli|obbattu|ladoo|laddu|mysore pak|burfi|barfi|mixture|chivda/i;
+export function compositionFor(name: string, meal: string): 'standalone' | 'side_only' {
+  const n = (name || '') + ' ' + (meal || '');
+  // a side/gravy word makes the dish side_only unless a true staple is present
+  if (SIDE_ONLY.test(n)) return STAPLE.test(n) ? 'standalone' : 'side_only';
+  if (STAPLE.test(n) || SNACKY.test(n)) return 'standalone';
+  return 'standalone';
 }
 export interface VideoRef { title: string; url: string; channel: string; }
 export interface PlanSlot { slot: string; recipe: PlanCard | null; video_refs: VideoRef[]; }
@@ -36,7 +50,27 @@ const REF: Record<string, RefEntry> = (() => {
 })();
 
 // ingredient keyword -> ref key (order matters: specific before generic)
+// items with no meaningful energy contribution - excluded from coverage math
+const NEGLIGIBLE = /^\s*(salt|water|ice|hing|asafoetida|perungayam)\b/i;
 const REF_KEYS: [RegExp, string][] = [
+  [/urad dal|black gram|ulundhu|ullundhu/i, 'urad_dal_black_gram'],
+  [/toor dal|arhar|thuvaram|pigeon pea|tuvaram/i, 'toor_dal_red_gram'],
+  [/bell pepper/i, 'capsicum'],
+  [/black pepper|pepper(?! p)/i, 'black_pepper'],
+  [/mustard/i, 'mustard_seeds'],
+  [/coriander (seeds?|powder)|dhania/i, 'coriander_seeds'],
+  [/fenugreek seeds|methi seeds|vendhayam/i, 'fenugreek_seeds'],
+  [/cloves?/i, 'cloves'],
+  [/cardamom|elaichi|elakkai/i, 'cardamom_green'],
+  [/green chill/i, 'green_chillies'],
+  [/(dry |dried |red |kashmiri )?chilli(es)?( powder)?|milagai/i, 'red_chilli_dry'],
+  [/mushroom/i, 'button_mushroom'],
+  [/sooji|rava|semolina/i, 'sooji_semolina'],
+  [/maida|refined flour|all[- ]purpose/i, 'maida_refined_flour'],
+  [/atta|wheat flour|\bflour\b/i, 'atta_whole_wheat_flour'],
+  [/(\d+\s*)?eggs?/i, 'egg_chicken_whole_raw'],
+  [/\bbutter\b/i, 'butter'],
+  [/\bsugar\b/i, 'sugar_white'],
   [/paneer/i, 'paneer'], [/poha|rice flakes|flattened rice|aval/i, 'poha_rice_flakes'],
   [/bengal gram|chana dal|channa dal|kadala paruppu/i, 'bengal_gram_dal'],
   [/besan|gram flour|kadalai maavu/i, 'bengal_gram_dal'],
@@ -47,7 +81,7 @@ const REF_KEYS: [RegExp, string][] = [
   [/curry leaves|karuveppilai/i, 'curry_leaves'], [/ginger/i, 'ginger'], [/garlic/i, 'garlic'],
   [/turmeric/i, 'turmeric_powder'], [/cumin|jeera|jeeragam/i, 'cumin_seed'],
   [/tamarind|puli/i, 'tamarind_pulp'], [/jaggery|vellam/i, 'jaggery_cane'],
-  [/coconut/i, 'coconut_fresh'], [/khoa|khoya|mawa/i, 'khoa'],
+  [/coconut/i, 'coconut_fresh'], [/jowar|sorghum|cholam/i, 'jowar'], [/raisins?|dry grapes/i, 'raisins_black'], [/peanuts?|ground ?nut|verkadalai|nilakadalai/i, 'peanut_groundnut'], [/cashew|kaju|munthiri/i, 'cashew'], [/almonds?|badam/i, 'almond'], [/khoa|khoya|mawa/i, 'khoa'],
   [/curd|yogurt|dahi|thayir/i, 'curd'], [/milk(?!maid)/i, 'milk_cow'],
   [/ghee|oil|vanaspati/i, 'oil_generic'],
   [/\brice\b|basmati|raw rice|boiled rice/i, 'rice_raw'],
@@ -60,7 +94,7 @@ const COUNT_G: [RegExp, number][] = [
   [/onion/, 110], [/tomato/, 90], [/eggs?/, 50], [/capsicum/, 120], [/potato/, 150],
   [/green chill/, 5], [/garlic/, 5], [/cashew/, 1.6], [/almond/, 1.2], [/lemon/, 45], [/banana leaf/, 20],
 ];
-const NUM = /(\d+(?:\.\d+)?(?:\s*[-/]\s*\d+(?:\.\d+)?)?)/;
+const NUM = /(\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?)/;
 
 function refKeyFor(text: string): string | null {
   for (const [re, key] of REF_KEYS) if (re.test(text)) return key;
@@ -72,10 +106,16 @@ export function estimateNutrition(ingredients: string, servings: number): Nutrit
   const zero: NutritionEstimate = { kcal: 0, protein_g: 0, fat_g: 0, carb_g: 0, fibre_g: 0, coverage_pct: 0, approx_used: false, unavailable: true };
   if (!ingredients || /QUANTITY UNSPECIFIED/i.test(ingredients) && !/\d/.test(ingredients)) return zero;
   let kcal = 0, p = 0, f = 0, c = 0, fib = 0, matchedG = 0, parsedG = 0, approx = false;
-  for (const frag of ingredients.split(/[,\n;]| and /i)) {
+  for (const frag of ingredients.split(/[,\n;]| \+ | and /i)) {
+    const stripped = frag.replace(new RegExp('^\\s*' + NUM.source + '\\s*(kg|g|gm|gms|ml|l|ltr|tsp|tbsp|tablespoons?|teaspoons?|cups?|pinch|sprigs?|handful)?\\s*', 'i'), '');
+    if (NEGLIGIBLE.test(stripped) || /\bwater\b/i.test(stripped) && !refKeyFor(stripped)) continue;
     const m = frag.match(NUM);
     if (!m) continue; // quantity not stated in source -> excluded from estimate
-    let qty = parseFloat(m[1].split(/[-/]/)[0]);
+    const qtxt = m[1].trim();
+    let qty: number;
+    if (/^\d+\s+\d+\/\d+$/.test(qtxt)) { const [w, fr] = qtxt.split(/\s+/); const [a, b] = fr.split('/'); qty = parseInt(w) + parseInt(a) / parseInt(b); }
+    else if (/^\d+\/\d+$/.test(qtxt)) { const [a, b] = qtxt.split('/'); qty = parseInt(a) / parseInt(b); }
+    else qty = parseFloat(qtxt.split('-')[0]);
     const rest = frag.slice(m.index! + m[1].length);
     let grams = 0;
     const um = rest.match(/^\s*([a-zA-Z]+)/);
@@ -171,7 +211,7 @@ export function generatePlan(input: PlanInput): PlanResult {
       if (pool.length) {
         const r = pool[used[s] % pool.length];
         used[s] += 1;
-        recipe = { name: r.name, url: r.url, channel: r.channel, diet: r.diet, meal: r.meal, partial: !!r.partial, nutrition: estimateNutrition(r.ingredients, servings) };
+        recipe = { name: r.name, url: r.url, channel: r.channel, diet: r.diet, meal: r.meal, partial: !!r.partial, nutrition: estimateNutrition(r.ingredients, servings), composition: compositionFor(r.name, r.meal) };
       }
       const vrefs = vidPool[s].slice((used[s] * 2) % Math.max(1, vidPool[s].length), (used[s] * 2) % Math.max(1, vidPool[s].length) + 2);
       return { slot: s, recipe, video_refs: vrefs };
