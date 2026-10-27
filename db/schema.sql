@@ -50,3 +50,11 @@ CREATE TABLE IF NOT EXISTS rawextracts (
   description TEXT, transcript TEXT, extracted_at TEXT, parse_status TEXT
 );
 CREATE INDEX IF NOT EXISTS rawextracts_video_id_idx ON rawextracts (video_id);
+
+-- Per-profile app settings (plan prefs etc.): remembered by name across devices.
+CREATE TABLE IF NOT EXISTS settings (
+  profile TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value TEXT,
+  PRIMARY KEY (profile, key)
+);

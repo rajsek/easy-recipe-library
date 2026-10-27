@@ -283,14 +283,28 @@ export default function App() {
   const [videoPage, setVideoPage] = useState(1);
   const [videoPageSize, setVideoPageSize] = useState(100);
   const [plan, setPlan] = useState<any | null>(null);
-  // Plan preferences persist per profile namespace on this device.
+  // Plan preferences are remembered by NAME on the server (they follow the
+  // profile across devices); localStorage is only a fast cache for first paint.
   const planKey = (k: string) => 'plan_' + k + '__' + (profileName || 'default');
   const [planStart, setPlanStartRaw] = useState<string>(() => localStorage.getItem(planKey('start')) || '');
   const [planLunch, setPlanLunchRaw] = useState<boolean>(() => localStorage.getItem(planKey('lunch')) === '1');
   const [planServings, setPlanServingsRaw] = useState<number>(() => parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
-  const setPlanStart = (v: string) => { setPlanStartRaw(v); localStorage.setItem(planKey('start'), v); };
-  const setPlanLunch = (v: boolean) => { setPlanLunchRaw(v); localStorage.setItem(planKey('lunch'), v ? '1' : '0'); };
-  const setPlanServings = (v: number) => { setPlanServingsRaw(v); localStorage.setItem(planKey('servings'), String(v)); };
+  const savePlanPrefs = (patch: Record<string, string>) => {
+    if (!profileName) return; // server requires a name; anonymous prefs stay device-local
+    apiFetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs: patch }) }).catch(() => {});
+  };
+  const loadPlanPrefs = () => {
+    if (!profileName) return;
+    apiFetch('/api/prefs').then((r) => r.json()).then((j) => {
+      const p = j.prefs || {};
+      if (p.plan_start !== undefined) { setPlanStartRaw(p.plan_start); localStorage.setItem(planKey('start'), p.plan_start); }
+      if (p.plan_lunch !== undefined) { setPlanLunchRaw(p.plan_lunch === '1'); localStorage.setItem(planKey('lunch'), p.plan_lunch); }
+      if (p.plan_servings !== undefined) { const n = parseInt(p.plan_servings, 10) || 2; setPlanServingsRaw(n); localStorage.setItem(planKey('servings'), String(n)); }
+    }).catch(() => {});
+  };
+  const setPlanStart = (v: string) => { setPlanStartRaw(v); localStorage.setItem(planKey('start'), v); savePlanPrefs({ plan_start: v }); };
+  const setPlanLunch = (v: boolean) => { setPlanLunchRaw(v); localStorage.setItem(planKey('lunch'), v ? '1' : '0'); savePlanPrefs({ plan_lunch: v ? '1' : '0' }); };
+  const setPlanServings = (v: number) => { setPlanServingsRaw(v); localStorage.setItem(planKey('servings'), String(v)); savePlanPrefs({ plan_servings: String(v) }); };
   const [fch, setFch] = useState(''); const [fdiet, setFdiet] = useState(''); const [fq, setFq] = useState('');
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -342,6 +356,7 @@ export default function App() {
     apiFetch('/api/channels').then((r) => r.json()).then(setChannels).catch(() => {});
     apiFetch('/api/recipes').then((r) => r.json()).then(setRecipes).catch(() => {});
     loadHistory();
+    loadPlanPrefs();
   }, [loadHistory]);
 
   useEffect(() => {
@@ -495,7 +510,7 @@ export default function App() {
   useEffect(() => {
     onAuthRequired = () => setLocked(true);
     onProfileChanged = () => {
-      setProfileInput(profileName); loadHistory();
+      setProfileInput(profileName); loadHistory(); loadPlanPrefs();
       setPlanStartRaw(localStorage.getItem(planKey('start')) || '');
       setPlanLunchRaw(localStorage.getItem(planKey('lunch')) === '1');
       setPlanServingsRaw(parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
@@ -523,7 +538,7 @@ export default function App() {
             {dataMode === 'demo' ? 'Recipe copy as of 27 Oct 2026 (not live) - saves/history reset on restart' : dataMode === 'pg' ? 'LIVE - your recipe database' : 'LIVE - your Google Sheet'}
           </div>
           <label className="profilebox">Name{' '}
-            <input value={profileInput} placeholder="(shared default)"
+            <input value={profileInput} placeholder="your name (required to save)"
               onChange={(e) => setProfileInput(e.target.value)}
               onBlur={() => setProfileNameGlobal(profileInput)}
               onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
@@ -679,7 +694,7 @@ export default function App() {
           </select></label>
           {!INDEX_TABS.has(tab) && <label>Time <select aria-label="time filter" value={timeBucket} onChange={e=>setTimeBucket(e.target.value as TimeBucket)}><option value="">All, including unknown</option><option value="quick">Up to 15 minutes</option><option value="mid">15-30 minutes</option><option value="over30">More than 30 minutes</option><option value="unknown">Not stated / unknown</option></select></label>}
           <p className="muted small">{INDEX_TABS.has(tab) ? 'Views are source counts; missing counts sort last. Publish dates come from the source data; videos without a date sort last. Video length is not cook time. The full matching video set is sorted before pagination.' : 'Sorting uses only complete, stated cook times (ranges sort by their upper end); estimates stay unknown and sort last. The time filter uses the stated cook time when there is one, otherwise the video length - video length is not a promised cook time.'} Difficulty and likes are not available in the source data.</p>
-          {timeBucket && <p className="muted small">Clear the time filter if no cards appear. Cards without a stated cook time are bucketed by video length, not by a promised cook time. The original search and history exclusions are unchanged.</p>}
+          {timeBucket && <p className="muted small">Clear the time filter if no cards appear. A card whose stated time is a range shows in every band the range touches. Cards without a stated cook time are bucketed by video length, not by a promised cook time. The original search and history exclusions are unchanged.</p>}
         </section>}
 
         {tab === 'recipes' && (

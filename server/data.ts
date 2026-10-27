@@ -230,4 +230,25 @@ export async function recordPick(filter: any, note: string, ids: string[], names
   await appendRow('Picks', [date, JSON.stringify(filter || {}), note || '', ids.join(','), '', names.join(' | '), normalizeProfile(profile)]);
 }
 
+// ---------- per-profile settings (plan prefs etc.) ----------
+// Remembered by name, stored server-side so they follow the profile across
+// devices. Demo mode keeps them in memory; Sheets mode has no settings tab.
+const demoSettings: Record<string, Record<string, string>> = {};
+
+export async function getSettings(profile: string): Promise<Record<string, string>> {
+  const key = normalizeProfile(profile);
+  if (MODE === 'demo') return { ...(demoSettings[key] || {}) };
+  if (MODE !== 'pg') return {};
+  const out: Record<string, string> = {};
+  for (const r of await readTab('Settings')) if (normalizeProfile(r.profile) === key) out[String(r.key)] = String(r.value ?? '');
+  return out;
+}
+
+export async function saveSettings(profile: string, prefs: Record<string, string>): Promise<void> {
+  const key = normalizeProfile(profile);
+  if (MODE === 'demo') { demoSettings[key] = { ...(demoSettings[key] || {}), ...prefs }; return; }
+  if (MODE !== 'pg') return;
+  for (const [k, v] of Object.entries(prefs)) await getPgStore().setSetting(key, k.slice(0, 40), String(v).slice(0, 200));
+}
+
 export const mode = MODE;

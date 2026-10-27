@@ -95,7 +95,7 @@ test('session reset clears stored context', async () => {
 });
 
 test('pick fills a thin checked pool with labelled video alternatives', async () => {
-  const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
+  const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': 'tester' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
   assert.equal(r.status, 200);
   const j = await r.json();
   assert.ok(Array.isArray(j.picks), 'picks array');
@@ -117,7 +117,7 @@ test('zero checked picks still get labelled video alternatives (no dead end)', a
   // then the response with 0 picks must still offer the corn videos.
   let j: any = null;
   for (let i = 0; i < 6; i++) {
-    const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
+    const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': 'tester' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
     assert.equal(r.status, 200);
     j = await r.json();
     if (j.picks.length === 0) break;
@@ -130,7 +130,7 @@ test('zero checked picks still get labelled video alternatives (no dead end)', a
 });
 
 test('Load more: batches are disjoint and respect the same filters', async () => {
-  const post = (seen: string[]) => fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn', seen }) }).then((r) => r.json());
+  const post = (seen: string[]) => fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': 'tester' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn', seen }) }).then((r) => r.json());
   const idsOf = (j: any) => [...(j.picks || []).map((p: any) => String(p.url).match(/v=([\w-]{11})/)?.[1]), ...(j.videos || []).map((v: any) => v.video_id)].filter(Boolean);
   const b1 = await post([]);
   const ids1 = idsOf(b1);
@@ -152,14 +152,14 @@ test('dish filter API: /api/dishes serves normalized dish identities; /api/pick 
   assert.ok(Array.isArray(d.dishes) && d.dishes.length > 5, 'dish vocabulary served');
   assert.ok(d.dishes.every((x: string) => !/[()]/.test(x)), 'parenthetical attributions stripped');
   assert.ok(d.dishes.some((x: string) => /^Ven Pongal$/.test(x)), 'known dish present in clean form');
-  const post = (body: any) => fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const post = (body: any) => fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': 'tester' }, body: JSON.stringify(body) }).then((r) => r.json());
   const dished = await post({ diet: '', meal: '', note: '', dishes: ['Ven Pongal'], seen: [] });
   assert.ok(dished.picks.length >= 1 && dished.picks.every((p: any) => /ven/i.test(p.name) && /pongal/i.test(p.name)), 'every pick matches the selected dish');
   assert.match(dished.noteInfo || '', /dish filter/, 'dish constraint disclosed');
   const zero = await post({ diet: '', meal: '', note: '', dishes: ['zzz-no-such-dish'], seen: [] });
   assert.equal(zero.picks.length, 0, 'unknown dish: zero picks');
   assert.match(zero.noteInfo || '', /no checked recipe name matches/, 'honest zero, no filling');
-  const tooMany = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dishes: new Array(11).fill('x') }) });
+  const tooMany = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': 'tester' }, body: JSON.stringify({ dishes: new Array(11).fill('x') }) });
   assert.equal(tooMany.status, 400, 'dish input is bounded');
 });
 
@@ -176,7 +176,7 @@ test('dish filter: dish-only Ask works, cache separates dish selections, video a
   assert.notEqual(a2.json.cached, true, 'different dish selection never reuses the cached answer');
   // Video alternatives: with a dish selected, every returned alternative's
   // title must contain all words of one selected dish (no unrelated fill).
-  const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: '', dishes: ['Ven Pongal'], seen: [] }) }).then((x) => x.json());
+  const r = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': 'tester' }, body: JSON.stringify({ diet: '', meal: '', note: '', dishes: ['Ven Pongal'], seen: [] }) }).then((x) => x.json());
   for (const v of r.videos || []) {
     assert.ok(/ven/i.test(v.title) && /pongal/i.test(v.title), 'video alternative off-dish: ' + v.title);
   }
@@ -184,37 +184,41 @@ test('dish filter: dish-only Ask works, cache separates dish selections, video a
 
 test('videos pagination: boundaries, clamps, counts over the full matching set', async () => {
   const get = (qs: string) => fetch(base + '/api/videos?' + qs).then((r) => r.json());
-  const p1 = await get('page_size=25&page=1');
-  assert.equal(p1.page_size, 25);
-  assert.equal(p1.videos.length, 25);
-  assert.equal(p1.pages, Math.ceil(p1.total / 25), 'pages cover the full matching count');
-  assert.ok(p1.total > 25, 'more than one page in demo data');
-  // Last page: exact boundary, no spill, no empty page
-  const last = await get(`page_size=25&page=${p1.pages}`);
-  assert.equal(last.page, p1.pages);
-  assert.ok(last.videos.length >= 1 && last.videos.length <= 25, 'last page holds the remainder');
-  assert.equal((p1.pages - 1) * 25 + last.videos.length, p1.total, 'pages tile the full set exactly');
-  // Out-of-range pages clamp to the nearest real page instead of empty/error
-  const over = await get('page_size=25&page=99999');
-  assert.equal(over.page, p1.pages);
-  assert.equal(over.videos.length, last.videos.length);
-  const under = await get('page_size=25&page=-3');
+  // UI page sizes are 50/100/200 (default 100); the API default must match.
+  const def = await get('');
+  assert.equal(def.page_size, 100, 'API default page size matches the UI default');
+  for (const size of [50, 100, 200]) {
+    const p1 = await get(`page_size=${size}&page=1`);
+    assert.equal(p1.page_size, size);
+    assert.equal(p1.videos.length, size);
+    assert.equal(p1.pages, Math.ceil(p1.total / size), 'pages cover the full matching count');
+    // Last page: exact boundary, no spill, no empty page
+    const last = await get(`page_size=${size}&page=${p1.pages}`);
+    assert.equal(last.page, p1.pages);
+    assert.ok(last.videos.length >= 1 && last.videos.length <= size, 'last page holds the remainder');
+    assert.equal((p1.pages - 1) * size + last.videos.length, p1.total, 'pages tile the full set exactly');
+    // Out-of-range pages clamp to the nearest real page instead of empty/error
+    const over = await get(`page_size=${size}&page=99999`);
+    assert.equal(over.page, p1.pages);
+    assert.equal(over.videos.length, last.videos.length);
+    // Stable ordering: no row repeats across pages
+    const p2 = await get(`page_size=${size}&page=2`);
+    const ids1 = new Set(p1.videos.map((v: any) => v.id));
+    assert.ok(p2.videos.every((v: any) => !ids1.has(v.id)), 'no row repeats across pages');
+  }
+  const under = await get('page_size=50&page=-3');
   assert.equal(under.page, 1);
-  assert.equal(under.videos.length, 25);
+  assert.equal(under.videos.length, 50);
   // page_size clamps
   const big = await get('page_size=9999');
   assert.equal(big.page_size, 200);
   const small = await get('page_size=1');
   assert.equal(small.page_size, 25);
   // Filters shrink the total, never inflate it; filtered pages still tile
-  const f = await get('page_size=25&page=1&channel=NoSuchChannelZZZ');
+  const f = await get('page_size=50&page=1&channel=NoSuchChannelZZZ');
   assert.equal(f.total, 0);
   assert.equal(f.pages, 1);
   assert.equal(f.videos.length, 0);
-  // Stable ordering: first id of page 2 never equals any id on page 1
-  const p2 = await get('page_size=25&page=2');
-  const ids1 = new Set(p1.videos.map((v: any) => v.id));
-  assert.ok(p2.videos.every((v: any) => !ids1.has(v.id)), 'no row repeats across pages');
 });
 
 test('profile header: demo history is isolated per profile namespace', async () => {
@@ -232,4 +236,27 @@ test('profile header: demo history is isolated per profile namespace', async () 
   assert.ok(!amma.some((h: any) => h.id === 'profiletestb'), "other profile's row hidden");
   assert.ok(raja.some((h: any) => h.id === 'profiletestb'), 'normalized name sees own row');
   assert.ok(!anon.some((h: any) => h.id === 'profiletesta' || h.id === 'profiletestb'), 'named rows never leak into the default namespace');
+});
+
+test('mutable writes require a name; reads stay open for the legacy namespace', async () => {
+  const anonPost = await fetch(base + '/api/history', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ video_id: 'abc', title: 'T', state: 'cooked' }) });
+  assert.equal(anonPost.status, 400, 'blank-profile history write rejected');
+  assert.match((await anonPost.json()).error || '', /name/i);
+  const anonPick = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
+  assert.equal(anonPick.status, 400, 'blank-profile pick rejected');
+  const anonRead = await fetch(base + '/api/history');
+  assert.equal(anonRead.status, 200, 'blank-profile read stays open (legacy rows recoverable)');
+});
+
+test('plan prefs persist per profile and follow the name, not the device', async () => {
+  const put = (profile: string, prefs: any) => fetch(base + '/api/prefs', { method: 'POST', headers: { 'content-type': 'application/json', 'x-profile': profile }, body: JSON.stringify({ prefs }) }).then((r) => r.json());
+  const get = (profile: string) => fetch(base + '/api/prefs', { headers: { 'x-profile': profile } }).then((r) => r.json());
+  await put('Amma', { plan_lunch: '1', plan_servings: '4' });
+  const amma = await get('  amma ');
+  assert.equal(amma.prefs.plan_lunch, '1');
+  assert.equal(amma.prefs.plan_servings, '4');
+  const raja = await get('Raja');
+  assert.notEqual(raja.prefs.plan_servings, '4', 'other profile unaffected');
+  const anonPut = await fetch(base + '/api/prefs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ prefs: { plan_lunch: '1' } }) });
+  assert.equal(anonPut.status, 400, 'prefs writes also require a name');
 });

@@ -17,7 +17,7 @@ import { generatePlan } from './mealplan.js';
 import {
   getVideos, getChannels, getRecipes, getRecipeRows, getHistory,
   getHistoryRows, getPickRows, saveHistory, recordPick, demoPicks, mode,
-  addQueueRequest, getQueueRequest, normalizeProfile
+  addQueueRequest, getQueueRequest, normalizeProfile, getSettings, saveSettings
 } from './data.js';
 import { pickForMe, excludedIds, excludedForAsk, filterCandidateRecipes, constrainAskCandidates, parseNote, noteVocab, normalizeNoteWords, typeaheadVocab, dishVocab, hasIngredientWord } from './pick.js';
 import { semanticRank, semanticStatus, constraintSignature, SemanticCache, SEMANTIC_VERSION, loadSemantic } from './semantic.js';
@@ -113,10 +113,37 @@ app.get('/api/history', async (req, res) => {
   res.json([...h, ...demoH]);
 });
 
+// Mutable requests require a self-declared name (user requirement): blank
+// profile writes are rejected so nobody's actions land in an anonymous pile.
+// Reads stay open so the legacy default-namespace rows remain recoverable.
+function requireProfile(req: any, res: any): string | null {
+  const profile = normalizeProfile(req.get('x-profile'));
+  if (!profile) { res.status(400).json({ error: 'Enter your name in the Name box first - saves and picks are kept separate per name.' }); return null; }
+  return profile;
+}
+
+app.get('/api/prefs', async (req, res) => {
+  res.json({ prefs: await getSettings(normalizeProfile(req.get('x-profile'))) });
+});
+
+app.post('/api/prefs', async (req, res) => {
+  const profile = requireProfile(req, res);
+  if (profile === null) return;
+  const body = req.body?.prefs;
+  if (!body || typeof body !== 'object' || Array.isArray(body) || Object.keys(body).length > 20) {
+    return res.status(400).json({ error: 'bad prefs' });
+  }
+  const clean: Record<string, string> = {};
+  for (const k of ['plan_start', 'plan_lunch', 'plan_servings']) if (body[k] !== undefined) clean[k] = String(body[k]);
+  await saveSettings(profile, clean);
+  res.json({ ok: true });
+});
+
 app.post('/api/history', async (req, res) => {
   try {
     const { video_id, title, state } = req.body || {};
-    const profile = normalizeProfile(req.get('x-profile'));
+    const profile = requireProfile(req, res);
+    if (profile === null) return;
     if (!/^[\w-]{1,20}$/.test(String(video_id || ''))) throw new Error('bad video_id');
     if (String(title || '').length > 200) throw new Error('title too long');
     if (mode === 'demo') {
@@ -154,7 +181,8 @@ app.post('/api/pick', async (req, res) => {
   const dishes = dishesRaw.map((d: any) => String(d || '').trim()).filter((d: string) => d.length > 0 && d.length <= 60);
   const filter = { diet, meal, dishes };
   const note = String(req.body?.note || '').slice(0, 200);
-  const pickProfile = normalizeProfile(req.get('x-profile'));
+  const pickProfile = requireProfile(req, res);
+  if (pickProfile === null) return;
   const [recipes, history, picks] = await Promise.all([getRecipeRows(), getHistoryRows(pickProfile), getPickRows(pickProfile)]);
   const ex = excludedIds(
     mode === 'demo' ? [...history, ...demoMemory.history.filter((h) => normalizeProfile(h.profile) === pickProfile).map((h) => ({ ...h, video_id: h.id }))] : history,
@@ -215,7 +243,9 @@ app.post('/api/ask', async (req, res) => {
   if (meal.length > 40) return res.status(400).json({ error: 'bad meal' });
   const note = String(req.body?.note || '').slice(0, 200);
   try {
-    const id = await addQueueRequest({ diet, meal, note, profile: normalizeProfile(req.get('x-profile')) });
+    const qProfile = requireProfile(req, res);
+    if (qProfile === null) return;
+    const id = await addQueueRequest({ diet, meal, note, profile: qProfile });
     res.json({ request_id: id });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'could not queue the request' });

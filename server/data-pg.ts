@@ -25,6 +25,7 @@ export const PG_TABS: Record<string, PgTab> = {
   History: { table: 'history', cols: ['date','video_id','title','state','notes','profile'] },
   Picks: { table: 'picks', cols: ['date','filters','note','suggested_video_ids','chosen_video_id','suggested_titles','profile'] },
   Queue: { table: 'queue', cols: ['request_id','ts','diet','meal','note','status','answer','reserved','profile'] },
+  Settings: { table: 'settings', cols: ['profile','key','value'] },
   RawExtracts: { table: 'rawextracts', cols: ['video_id','title','channel_hint','yt_publish_date','description','transcript','extracted_at','parse_status'] },
 };
 
@@ -55,6 +56,7 @@ export function rowsToObjects(cols: string[], rows: any[]): Array<Record<string,
 export interface PgStore {
   readTab(name: string): Promise<Array<Record<string, string>>>;
   appendRow(name: string, row: Array<string | null>): Promise<void>;
+  setSetting(profile: string, key: string, value: string): Promise<void>;
 }
 
 /** Live store: SQL-over-HTTP against DATABASE_URL. One call = one HTTP query. */
@@ -72,6 +74,11 @@ export function createPgStore(url: string, client?: PgClient): PgStore {
       if (!tab) throw new Error(`pg: unknown tab ${name}`);
       const q = buildInsert(tab, row);
       await sql.query(q.text, q.values as any[]);
+    },
+    async setSetting(profile, key, value) {
+      await sql.query(
+        'INSERT INTO settings (profile, key, value) VALUES ($1, $2, $3) ON CONFLICT (profile, key) DO UPDATE SET value = $3',
+        [profile, key, value] as any[]);
     },
   };
 }

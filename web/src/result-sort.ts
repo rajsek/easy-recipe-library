@@ -64,13 +64,15 @@ export function sortedResults<T>(
   }).filter(r => {
     if (!bucket) return true;
     if (bucket === 'unknown') return !r.filter;
-    // A stated range must lie wholly inside one bucket; a range that straddles
-    // a boundary is honest about its span and so appears in no time bucket
-    // (it is still not 'unknown' - it has a stated time).
+    // Overlap rule: a stated range appears in every bucket it touches, so a
+    // known range is never silently dropped from filtering. Bucket intervals:
+    // quick (0,15], mid (15,30], over30 (30,+inf) - boundary-touching counts
+    // as the lower bucket only (positive-width overlap).
     if (r.range) {
       const [low, high] = r.range;
-      const b = high <= 15 ? 'quick' : low > 15 && high <= 30 ? 'mid' : low > 30 ? 'over30' : undefined;
-      return b === bucket;
+      if (bucket === 'quick') return low < 15;
+      if (bucket === 'mid') return low < 30 && high > 15;
+      return high > 30; // over30
     }
     if (!r.filter) return false;
     return bucketOf(r.filter.minutes) === bucket;
