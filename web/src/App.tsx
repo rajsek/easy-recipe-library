@@ -38,17 +38,43 @@ async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> 
   return r;
 }
 
-function TokenGate({ onUnlock }: { onUnlock: (t: string) => void }) {
+// The unlock collects name + password together (user requirement): the
+// password opens the app, the name is the profile every save/pick/plan is
+// kept under. Both are required - there is no anonymous entry for clients
+// that were already unlocked before names existed either.
+function TokenGate({ onUnlock }: { onUnlock: (t: string, name: string) => void }) {
+  const [name, setName] = useState(profileName);
   const [v, setV] = useState('');
+  const ok = name.trim().length > 0 && v.trim().length > 0;
   return (
     <main className="wrap">
       <div className="tokengate">
         <h2>Locked</h2>
-        <p className="muted">This app is protected. Enter the app password to continue.</p>
+        <p className="muted">Enter your name and the app password to continue. Your name keeps your saves, picks and plan separate from everyone else using this app.</p>
+        <input type="text" placeholder="Your name" value={name} autoComplete="off"
+          onChange={(e) => setName(e.target.value)} />
         <input type="password" placeholder="App password" value={v}
           onChange={(e) => setV(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && v.trim()) onUnlock(v.trim()); }} />
-        <button className="btn primary" disabled={!v.trim()} onClick={() => onUnlock(v.trim())}>Unlock</button>
+          onKeyDown={(e) => { if (e.key === 'Enter' && ok) onUnlock(v.trim(), name.trim()); }} />
+        <button className="btn primary" disabled={!ok} onClick={() => onUnlock(v.trim(), name.trim())}>Unlock</button>
+      </div>
+    </main>
+  );
+}
+
+// Already-unlocked client with no name yet (saved token from before names
+// existed): ask only for the name, not the password again.
+function NameGate({ onNamed }: { onNamed: (name: string) => void }) {
+  const [name, setName] = useState('');
+  return (
+    <main className="wrap">
+      <div className="tokengate">
+        <h2>Your name</h2>
+        <p className="muted">Saves, picks and the meal plan are now kept separate per name. Enter your name to continue - use the same name every time to see your own history.</p>
+        <input type="text" placeholder="Your name" value={name} autoComplete="off"
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onNamed(name.trim()); }} />
+        <button className="btn primary" disabled={!name.trim()} onClick={() => onNamed(name.trim())}>Continue</button>
       </div>
     </main>
   );
@@ -530,13 +556,18 @@ export default function App() {
 
   if (locked) {
     return (
-      <TokenGate onUnlock={(t) => {
+      <TokenGate onUnlock={(t, name) => {
+        setProfileNameGlobal(name);
         authToken = t;
         localStorage.setItem('app_token', t);
         setLocked(false);
         window.location.reload();
       }} />
     );
+  }
+
+  if (!profileName) {
+    return <NameGate onNamed={(name) => { setProfileNameGlobal(name); setProfileInput(profileName); }} />;
   }
 
   return (
@@ -951,10 +982,17 @@ export default function App() {
                 <p className="muted">{plan.source_note}</p>
               </details>
               {plan.days_plan.map((d: any, di: number) => (
-                <details key={d.date} className="plan-day" open={di === 0}>
+                <details key={d.date} className={'plan-day' + (di === 0 ? ' today' : '')} open={di === 0}>
                   <summary className="plan-day-summary">
-                    <span className="plan-day-title">{d.weekday}, {d.date}</span>
-                    <span className="plan-day-compact muted">{d.slots.map((s: any) => (s.recipe ? s.recipe.name : null)).filter(Boolean).join(' · ')}</span>
+                    <span className="plan-date" aria-hidden="true">
+                      <span className="plan-date-dow">{String(d.weekday).slice(0, 3)}</span>
+                      <span className="plan-date-num">{String(d.date).slice(8)}</span>
+                      <span className="plan-date-mon">{new Date(d.date + 'T00:00:00').toLocaleDateString('en-GB', { month: 'short' })}</span>
+                    </span>
+                    <span className="plan-day-head">
+                      <span className="plan-day-title">{di === 0 ? 'Today - ' : ''}{d.weekday}, {d.date}</span>
+                      <span className="plan-day-compact muted">{d.slots.map((s: any) => (s.recipe ? s.recipe.name : null)).filter(Boolean).join(' · ')}</span>
+                    </span>
                   </summary>
                   <ul>
                     {d.slots.map((s: any) => (

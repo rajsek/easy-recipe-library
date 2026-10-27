@@ -143,26 +143,44 @@ a.rowtitle:hover { color:var(--leaf); }
 .cblisthead .cnt { font-size: 12px; }
 
 /* 30-day plan tab */
-.plan-controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+/* Plan tab: a month menu on the fridge door. Each day is one row with a
+   date marker on the left - the marker is the memorable element, everything
+   else stays quiet. Today is pinned open and tinted. */
+.plan-controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 10px 0 14px; }
 .plan-controls input[type=date], .plan-controls input[type=number] { margin-left: 6px; padding: 4px 6px; }
 .plan-controls input[type=number] { width: 56px; }
 .plan-assumptions { margin-bottom: 14px; font-size: 0.9em; }
-.plan-day { border-top: 1px solid #e3ddd2; padding: 8px 0; }
-.plan-day h3 { margin: 4px 0 6px; font-size: 1em; }
-.plan-day ul { margin: 0; padding-left: 0; list-style: none; }
-.plan-slot { padding: 3px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
-.plan-slot-name { display: inline-block; min-width: 74px; font-weight: 600; text-transform: capitalize; }
+.plan-day { display: block; border-top: 1px solid var(--line); padding: 0; }
+.plan-day.today { background: var(--leaf-tint); border-radius: 8px; border-top: none; margin-bottom: 4px; }
+.plan-day-summary { display: flex; gap: 12px; align-items: center; padding: 10px 8px; cursor: pointer; list-style: none; }
+.plan-day-summary::-webkit-details-marker { display: none; }
+.plan-day-summary::after { content: '+'; margin-left: auto; color: var(--muted); font-size: 16px; }
+.plan-day[open] > .plan-day-summary::after { content: '–'; }
+.plan-date { flex: none; width: 44px; text-align: center; border: 1px solid var(--line); border-radius: 8px; background: var(--card); padding: 4px 0; line-height: 1.15; }
+.plan-date-dow { display: block; font-size: 10px; color: var(--muted); }
+.plan-date-num { display: block; font-size: 18px; font-weight: 700; color: var(--leaf-deep); }
+.plan-date-mon { display: block; font-size: 10px; color: var(--muted); }
+.plan-day.today .plan-date { border-color: var(--leaf); }
+.plan-day-head { min-width: 0; }
+.plan-day-title { display: block; font-weight: 600; font-size: 14px; }
+.plan-day-compact { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 62vw; }
+.plan-day ul { margin: 0; padding: 0 8px 10px 64px; list-style: none; }
+.plan-slot { padding: 6px 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; border-top: 1px dashed var(--line); }
+.plan-slot:first-child { border-top: none; }
+.plan-slot-name { display: inline-block; min-width: 74px; font-weight: 600; text-transform: capitalize; font-size: 13px; color: var(--leaf-deep); }
 .plan-vref { font-size: 0.88em; }
 .plan-sample-note { background: #fdf3e0; border: 1px solid #e8d9b0; border-radius: 6px; padding: 8px 10px; font-size: 0.92em; }
 .plan-thumb { width: 72px; height: 54px; object-fit: cover; border-radius: 6px; flex: none; }
-.plan-slot { align-items: flex-start; }
-.plan-slot-body { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.plan-slot-body { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: baseline; flex: 1; min-width: 0; }
 .plan-ing { width: 100%; font-size: 0.9em; }
 .plan-ing ul { margin: 4px 0 4px 18px; list-style: disc; }
 .plan-nutrition { display: block; margin: 2px 0; font-size: 13px; }
 .plan-nutrition-batch { display: block; }
 .plan-nutrition-portion { display: block; color: #444; }
-.plan-day { border-top: 1px solid #ddd; padding: 4px 0 8px; }
+@media (max-width: 480px) {
+  .plan-day ul { padding-left: 8px; }
+  .plan-day-compact { max-width: 48vw; }
+}
 .plan-day-summary { cursor: pointer; list-style: none; padding: 6px 0; }
 .plan-day-summary::-webkit-details-marker { display: none; }
 .plan-day-summary::before { content: '▸ '; color: #666; }
