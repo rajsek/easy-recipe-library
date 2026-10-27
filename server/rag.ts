@@ -10,6 +10,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { videoDietHint } from './video-diet.js';
 import { embed, cosine, loadSemantic } from './semantic.js';
 
 export interface VideoMatch {
@@ -78,7 +79,7 @@ export async function retrieveVideos(question: string, k = 10, excludeIds: Recor
       dot += a * b; na += a * a; nb += b * b;
     }
     const score = na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
-    scored.push({ video_id, title, channel, category, diet_hint, status, score });
+    scored.push({ video_id, title, channel, category, diet_hint: videoDietHint(title, diet_hint), status, score });
   }
   scored.sort((a, b) => b.score - a.score);
   return scored.slice(0, k);

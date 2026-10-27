@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { taFilter, taNav, toggleSel } from './ta';
+import { sortedResults, type SortKey, type TimeBucket } from './result-sort';
 
 interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; diet: string; published: string; status: string; }
 interface Recipe { name: string; url: string; channel: string; diet: string; meal: string; time: string; ingredients: string; steps: string[]; source: string; partial: boolean; }
@@ -209,8 +210,8 @@ function RecipeCard({ c, onSaved }: { c: Recipe; onSaved: () => void }) {
       <div className="cardbody">
         <h3>{c.name}</h3>
         <div className="muted small">{c.channel}</div>
-        <Chips diet={c.diet} meal={c.meal} />
-        {c.partial && <div className="chips"><span className="chip warn">quantities partly approximate - see note</span></div>}
+        <Chips diet={c.diet} meal={c.meal} time={c.time} />
+        {c.partial && <div className="chips"><span className="chip warn">Incomplete/conflicting source quantities - confirm before cooking</span></div>}
         <details>
           <summary>Ingredients &amp; steps</summary>
           <div className="sec">Time</div><p>{c.time}</p>
@@ -249,6 +250,8 @@ export default function App() {
   const [taOpen, setTaOpen] = useState(false);
   const [taIndex, setTaIndex] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [resultSort, setResultSort] = useState<SortKey>('original');
+  const [timeBucket, setTimeBucket] = useState<TimeBucket>('');
   const [dataMode, setDataMode] = useState<string>('');
   const [locked, setLocked] = useState(false);
   const [videos, setVideos] = useState<VideoItem[] | null>(null);
@@ -283,6 +286,8 @@ export default function App() {
   const [aiOn, setAiOn] = useState(false);
   const [semanticInfo, setSemanticInfo] = useState<{ available: boolean; reason?: string; version?: string } | null>(null);
 
+  useEffect(() => { setResultSort('original'); setTimeBucket(''); }, [tab]);
+
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
     apiFetch('/api/ingredients').then((r) => r.json()).then((j) => setIngVocab(j.ingredients || [])).catch(() => {});
@@ -312,8 +317,11 @@ export default function App() {
     if (fch) params.set('channel', fch);
     if (fdiet) params.set('diet', fdiet);
     if (fq) params.set('q', fq);
-    apiFetch('/api/videos?' + params).then((r) => r.json()).then(setVideos).catch(() => setVideos([]));
-  }, [tab, fch, fdiet, fq]);
+    if (resultSort === 'name' || resultSort === 'views' || resultSort === 'newest') params.set('sort', resultSort);
+    const controller = new AbortController();
+    apiFetch('/api/videos?' + params, {signal: controller.signal}).then((r) => { if (!r.ok) throw new Error('Video search failed'); return r.json(); }).then(rows => { if (!controller.signal.aborted) setVideos(rows); }).catch(() => { if (!controller.signal.aborted) setVideos([]); });
+    return () => controller.abort();
+  }, [tab, fch, fdiet, fq, resultSort]);
 
   // Ingredient typeahead: canonical chips from the verified library vocabulary
   // (fetched once from /api/ingredients - zero AI calls per keystroke). Unknown
@@ -448,7 +456,7 @@ export default function App() {
         <div className="wrap">
           <h1>Easy Recipe Library</h1>
           <div className={dataMode === 'demo' ? 'modebadge demo' : 'modebadge live'}>
-            {dataMode === 'demo' ? 'Recipe copy as of 26 Oct 2026 (not live) - saves/history reset on restart' : 'LIVE - your Google Sheet'}
+            {dataMode === 'demo' ? 'Recipe copy as of 27 Oct 2026 (not live) - saves/history reset on restart' : 'LIVE - your Google Sheet'}
           </div>
         </div>
       </header>
@@ -593,9 +601,20 @@ export default function App() {
           </section>
         )}
 
+        {(tab === 'recipes' || tab === 'pick' || INDEX_TABS.has(tab)) && <section className="filters" aria-label="result sorting">
+          <label>Sort <select aria-label="sort results" value={resultSort} onChange={e=>setResultSort(e.target.value as SortKey)}>
+            <option value="original">Original order</option><option value="name">Name A-Z</option>
+            {!INDEX_TABS.has(tab) && <><option value="time-asc">Stated cook time: shortest</option><option value="time-desc">Stated cook time: longest</option></>}
+            {INDEX_TABS.has(tab) && <><option value="views">Video views: highest</option><option value="newest">Newest published</option></>}
+          </select></label>
+          {!INDEX_TABS.has(tab) && <label>Cook time <select aria-label="cook time filter" value={timeBucket} onChange={e=>setTimeBucket(e.target.value as TimeBucket)}><option value="">All, including unknown</option><option value="quick">10-15 minutes</option><option value="over30">More than 30 minutes</option><option value="over60">More than 1 hour</option><option value="unknown">Not stated / not sortable</option></select></label>}
+          <p className="muted small">{INDEX_TABS.has(tab) ? 'Views are source counts; missing counts sort last. Publish dates come from the source data; videos without a date sort last. Video length is not cook time. The full matching video set is sorted before the 300-result display limit.' : 'Only complete, stated cook times are sortable; ranges sort by their upper end. Estimates and partial steps stay unknown and sort last. Time filters hide unknowns and videos without cook times.'} Difficulty and likes are not available in the source data.</p>
+          {timeBucket && <p className="muted small">Clear the cook time filter if no cards appear. The original search and history exclusions are unchanged.</p>}
+        </section>}
+
         {tab === 'recipes' && (
           recipes.length === 0 ? <p className="muted">No checked recipes yet.</p>
-            : <div className="grid">{recipes.map((c) => <RecipeCard key={c.name} c={c} onSaved={loadHistory} />)}</div>
+            : <div className="grid">{sortedResults(recipes,resultSort,timeBucket,c=>({name:c.name,time:c.time})).map((c) => <RecipeCard key={c.name} c={c} onSaved={loadHistory} />)}</div>
         )}
 
         {tab === 'pick' && pickResult && (
@@ -667,14 +686,14 @@ export default function App() {
                       <p className="chips"><span className="chip warn">note/filters changed since this answer - press "Ask about the note above" again</span></p>
                     )}
                     <p style={{ whiteSpace: 'pre-wrap' }}>{askAiResult.text}</p>
-                    {askAiResult.recipes.map((p) => (
+                    {sortedResults(askAiResult.recipes,resultSort,timeBucket,p=>({name:p.name,time:p.time})).map((p) => (
                       <div key={p.name} style={{ borderTop: '1px solid #e5e0d8', paddingTop: 8, marginTop: 8 }}>
                         <h3>{p.name}</h3>
                         <Chips diet={p.diet} meal={p.meal} time={p.time} />
                         <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
                       </div>
                     ))}
-                    {(askAiResult.videos || []).map((v) => (
+                    {sortedResults(askAiResult.videos || [],resultSort,timeBucket,v=>({name:v.title})).map((v) => (
                       <div key={v.url} style={{ borderTop: '1px solid #e5e0d8', paddingTop: 8, marginTop: 8 }}>
                         <h3>{v.title}</h3>
                         <p className="chips"><span className="chip warn">{v.status}</span><span className="chip">{v.channel}</span></p>
@@ -693,7 +712,7 @@ export default function App() {
             {pickResult.usedAI && (
               <p className="muted span-all">Reasons are AI taste suggestions, not nutrition, allergy or safety guarantees.</p>
             )}
-            {pickResult.picks.map((p) => (
+            {sortedResults([...pickResult.picks,...extraPicks],resultSort,timeBucket,p=>({name:p.name,time:p.time})).map((p) => (
               <article className="card" key={p.name}>
                 <a className="thumb" href={p.url} target="_blank" rel="noopener">
                   <img src={thumb(p.url)} loading="lazy" alt="" />
@@ -708,10 +727,10 @@ export default function App() {
                 </div>
               </article>
             ))}
-            {(pickResult.videos || []).length > 0 && (
+            {!timeBucket && (pickResult.videos || []).length > 0 && (
               <p className="muted span-all">Only {pickResult.picks.length} checked {pickResult.picks.length === 1 ? 'recipe matches' : 'recipes match'}. Videos below are full-library matches whose ingredients and steps are not extracted yet:</p>
             )}
-            {(pickResult.videos || []).map((v) => (
+            {sortedResults(pickResult.videos || [],resultSort,timeBucket,v=>({name:v.title})).map((v) => (
               <article className="card" key={v.video_id}>
                 <a className="thumb" href={v.url} target="_blank" rel="noopener">
                   <img src={thumb(v.url)} loading="lazy" alt="" />
@@ -725,22 +744,7 @@ export default function App() {
                 </div>
               </article>
             ))}
-            {extraPicks.map((p) => (
-              <article className="card" key={p.name}>
-                <a className="thumb" href={p.url} target="_blank" rel="noopener">
-                  <img src={thumb(p.url)} loading="lazy" alt="" />
-                  <span className="play">▶</span>
-                </a>
-                <div className="cardbody">
-                  <h3>{p.name}</h3>
-                  <Chips diet={p.diet} meal={p.meal} time={p.time} />
-                  {p.reason && <p>{p.reason}</p>}
-                  <a className="btn ghost" href={p.url} target="_blank" rel="noopener">Watch video</a>
-                  <ActionButtons id={videoId(p.url)} title={p.name} onSaved={loadHistory} />
-                </div>
-              </article>
-            ))}
-            {extraVideos.map((v) => (
+            {sortedResults(extraVideos,resultSort,timeBucket,v=>({name:v.title})).map((v) => (
               <article className="card" key={v.video_id}>
                 <a className="thumb" href={v.url} target="_blank" rel="noopener">
                   <img src={thumb(v.url)} loading="lazy" alt="" />
@@ -767,14 +771,14 @@ export default function App() {
         {INDEX_TABS.has(tab) && (
           videos === null ? <p className="muted">Loading...</p>
             : videos.length === 0 ? <p className="muted">No videos match. Clear search or filters.</p>
-            : videos.map((v) => (
+            : sortedResults(videos,resultSort,'',v=>({name:v.title,views:v.views,published:v.published})).map((v) => (
               <article className="row" key={v.id}>
                 <a className="rowthumb" href={v.url} target="_blank" rel="noopener"><img src={v.thumb} loading="lazy" alt="" /></a>
                 <div className="rowbody">
                   <a className="rowtitle" href={v.url} target="_blank" rel="noopener">{v.title}</a>
                   <div className="muted small">{v.channel}{v.published ? ', ' + v.published : ''}</div>
                   <div className="rowmeta">
-                    <span className="chip">{v.category}</span>
+                    <span className="chip">{v.category}</span><span className="chip">Views: {v.views || 'not stated'}</span>
                     <span className="chip">{v.diet}</span>
                     {v.status === 'raw-extracted' && <span className="chip">details captured</span>}
                   </div>

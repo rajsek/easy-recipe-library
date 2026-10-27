@@ -4,19 +4,22 @@ This file describes how the app is put together. It is updated in the same
 commit as any architecture change, keeping section headings and diagram node
 IDs stable so `git diff` shows exactly what each change touched.
 
-## Current state (as of 2026-10-26 ~21:15 IST; production = deployment of 365bf8b)
+## Current state (2026-10-27; last verified production = 6365f0a)
 
-Live on Vercel (Hobby, free tier), demo-snapshot mode. PRODUCTION currently serves
-deployment of commit 365bf8b (verified live 2026-10-26 20:46-20:56 IST): 62 cards
-(61 verified + 1 partial) + 4468-video index, AND note semantics, staged zero-reasons,
-multi-chip typeahead UI, chips-only Ask fix, and pick-route video alternatives.
-The repo main is newer (1a164f1: paging + post-output validation + zero-pick videos + video-fill UI)
-and AWAITS its build: since ~20:35 every commit's Vercel check reports
-"Deployment rate limited - retry in 24 hours" (grounded via GitHub commit statuses on
-3208a7f/837bc57/6cbfece/c7ead0e/1a164f1) - the earlier "stalled automation, cause unknown"
-is resolved to this rate limit; production stays on 365bf8b until Vercel lifts it. "State" below
-says Live only for what production actually serves. Saves/history are per-instance
-memory and reset on restart.
+Production was browser-verified at 6365f0a on 27 October: dish and ingredient
+checkboxes, two real AI requests, composed-note Load more, and named history
+exclusions passed the changed-flow checks. This snapshot contains 62 recipe
+cards (61 verified + 1 partial); the source library has newer extractions.
+Saves, suggestions, sessions and encrypted traces still use per-instance
+memory in demo mode and can reset. No durable-storage claim is made.
+
+The stable sorting/diet revision is LOCAL until its exact deployed commit is
+verified. It adds full-source name/view ordering before the video display cap,
+stated-duration sorting and filters for checked cards, and conservative diet
+contradiction checks for indexed video titles. Unknown durations, difficulty
+and likes are not invented. Existing ranking, history and ingredient paging
+semantics remain unchanged. Automatic Doc/socket replies remain unavailable;
+no speculative transport or persistence adapter is included in this revision.
 
 ## Request flow (diagram)
 
@@ -49,6 +52,8 @@ flowchart LR
 | ID | Component | Role | State |
 | --- | --- | --- |
 | 2026-10-27 00:07 | fix/paging-ingredient-snapshot, based on main 02f932f | LOCAL ONLY, NOT RELEASED: fixed Load-more dropping ingredient chips. Initial Pick sends composedNote() but old Load-more sent raw pickForm.note. Snapshot now stores raw note for stale detection AND composed note for paging requests. Regression source-shape guard plus tests/pick-checkboxes.e2e.mjs actual network-body assertion verifies rice survives Load-more. Also fixes staged dish-zero wording: a matching dish excluded by history is named as already suggested in the last 30 days, not absent from the checked library. Local 390px matrix: dish-only Ask, ingredient-only second Ask, combined honest no-repeat zero, OR dishes plus ingredient AND, stale/reset, page retention, filter-change clears append state, keyboard Space chip sync; fake provider, not live provider quality. Production acceptance remains blocked by quota until live deploy can be checked. | --- |
+| result-sorting | web/src/result-sort.ts + server/data.ts | Stable full-source video name/view ordering before the 300-result cap; checked-card stated-time sorting. Duration ranges sort by upper end and must fit the whole selected bucket; unknowns sort last | Local revision; deployed acceptance pending |
+| video-diet | server/video-diet.ts | Title contradictions downgrade indexed diet hints; explicit English/German egg words cannot pass pure-Veg filters. Unknown hints remain unknown. Indexed titles are not full ingredient verification | Local revision; deployed acceptance pending |
 | web-ui | React app (Vite build) | Filters, picks, ask, history, comms. Committed, awaiting build: pick results page via a Load more button - batches append, no duplicates, filters of the original search preserved, honest exhaustion message | Live (paging committed, awaiting build) |
 | guardrails | Deterministic checks (server/pick.ts) | Verified-only, strict diet, exclusions, food words, 30-day no-repeat. Multiple food words combine as AND; question words are never interpreted as ingredients; a zero answer names the real cause with counts (no-repeat vs diet/meal vs own exclusion vs library gap). Always run BEFORE any model; no model can widen the pool. Post-output validation: an AI reason that denies a hard note word (e.g. "does not contain corn" on a corn-matched card) is hidden and disclosed in noteInfo - the deterministic match stands, false prose never renders | Live in production (365bf8b): AND semantics, question-word guard, staged zero-reasons. Committed, awaiting build: post-output reason validation |
 | session-store | In-memory ask sessions (server/session.ts) | 30-min TTL; follow-ups like "another option" reuse stored diet/meal and hide what was just shown; reset via "New conversation" | Live (resets on restart) |
