@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { taFilter, taNav, toggleSel } from './ta';
 import { sortedResults, type SortKey, type TimeBucket } from './result-sort';
 import { verifyToken } from './unlock';
+import { apiFetch, profileNameRef, setProfileNameGlobal, setAuthToken, setOnAuthRequired, setOnProfileChanged } from './api';
 
 interface VideoItem { id: string; title: string; channel: string; url: string; thumb: string; views: string; category: string; duration_s?: string; diet: string; published: string; status: string; }
 interface VideoPage { videos: VideoItem[]; total: number; page: number; pages: number; page_size: number; }
@@ -9,42 +10,14 @@ interface Recipe { name: string; url: string; channel: string; diet: string; mea
 interface HistoryEntry { date: string; id: string; title: string; state: string; }
 interface PickResult { count: number; usedAI: boolean; note: string; noteInfo?: string; interpreted?: { from: string; to: string }[]; picks: { name: string; url: string; time: string; diet: string; meal: string; reason: string }[]; videos?: { video_id: string; title: string; url: string; channel: string; diet: string; status: string }[]; }
 
-// All /api calls go through apiFetch: it attaches the saved app token and,
-// on 401, drops the token and asks the app to show the unlock form again.
-let authToken = localStorage.getItem('app_token') || '';
-let onAuthRequired: () => void = () => {};
-
-// Self-declared profile name: logical separation of history/picks/queue per
-// person on a shared device. NOT a login - the server treats it as a plain
-// label, and anyone can type any name.
-let profileName = localStorage.getItem('profile_name') || '';
-let onProfileChanged: () => void = () => {};
-function setProfileNameGlobal(name: string) {
-  profileName = name.replace(/\s+/g, ' ').trim().slice(0, 40);
-  localStorage.setItem('profile_name', profileName);
-  onProfileChanged();
-}
-
-async function apiFetch(url: string, opts: RequestInit = {}): Promise<Response> {
-  const headers: Record<string, string> = { ...(opts.headers as any) };
-  if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
-  if (profileName) headers['X-Profile'] = profileName;
-  const r = await fetch(url, { ...opts, headers });
-  if (r.status === 401) {
-    authToken = '';
-    localStorage.removeItem('app_token');
-    onAuthRequired();
-    throw new Error('unauthorized');
-  }
-  return r;
-}
+// (auth/profile/fetch plumbing lives in ./api - see the stale-401 guard there)
 
 // The unlock collects name + password together (user requirement): the
 // password opens the app, the name is the profile every save/pick/plan is
 // kept under. Both are required - there is no anonymous entry for clients
 // that were already unlocked before names existed either.
 function TokenGate({ onUnlock }: { onUnlock: (t: string, name: string) => void }) {
-  const [name, setName] = useState(profileName);
+  const [name, setName] = useState(profileNameRef());
   const [v, setV] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -359,15 +332,15 @@ export default function App() {
   const [plan, setPlan] = useState<any | null>(null);
   // Plan preferences are remembered by NAME on the server (they follow the
   // profile across devices); localStorage is only a fast cache for first paint.
-  const planKey = (k: string) => 'plan_' + k + '__' + (profileName || 'default');
+  const planKey = (k: string) => 'plan_' + k + '__' + (profileNameRef() || 'default');
   const [planStart, setPlanStartRaw] = useState<string>(() => localStorage.getItem(planKey('start')) || '');
   const [planLunch, setPlanLunchRaw] = useState<boolean>(() => localStorage.getItem(planKey('lunch')) === '1');
   const savePlanPrefs = (patch: Record<string, string>) => {
-    if (!profileName) return; // server requires a name; anonymous prefs stay device-local
+    if (!profileNameRef()) return; // server requires a name; anonymous prefs stay device-local
     apiFetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs: patch }) }).catch(() => {});
   };
   const loadPlanPrefs = () => {
-    if (!profileName) return;
+    if (!profileNameRef()) return;
     apiFetch('/api/prefs').then((r) => r.json()).then((j) => {
       const p = j.prefs || {};
       if (p.plan_start !== undefined) { setPlanStartRaw(p.plan_start); localStorage.setItem(planKey('start'), p.plan_start); }
@@ -575,15 +548,15 @@ export default function App() {
     }
   }
 
-  const [profileInput, setProfileInput] = useState(profileName);
+  const [profileInput, setProfileInput] = useState(profileNameRef());
 
   useEffect(() => {
-    onAuthRequired = () => setLocked(true);
-    onProfileChanged = () => {
+    setOnAuthRequired(() => setLocked(true));
+    setOnProfileChanged(() => {
       // Switching person: drop everything the previous profile had on screen
       // immediately - selections, results, queue polls, cached prefs - before
       // loading the new profile's data. Nothing may bleed across.
-      setProfileInput(profileName);
+      setProfileInput(profileNameRef());
       setSelIngs([]); setSelDishes([]); setDishInput('');
       setPickResult(null); setExtraPicks([]); setExtraVideos([]); setSeenIds([]); setPickForm(null);
       setAskAiResult(null); setAskAiState('idle'); setAskAiError(''); setSessionInfo(null);
@@ -593,24 +566,23 @@ export default function App() {
       loadHistory(); loadPlanPrefs();
       setPlanStartRaw(localStorage.getItem(planKey('start')) || '');
       setPlanLunchRaw(localStorage.getItem(planKey('lunch')) === '1');
-    };
-    return () => { onAuthRequired = () => {}; onProfileChanged = () => {}; };
+    });
+    return () => { setOnAuthRequired(() => {}); setOnProfileChanged(() => {}); };
   }, [loadHistory]);
 
   if (locked) {
     return (
       <TokenGate onUnlock={(t, name) => {
         setProfileNameGlobal(name);
-        authToken = t;
-        localStorage.setItem('app_token', t);
+        setAuthToken(t);
         setLocked(false);
         window.location.reload();
       }} />
     );
   }
 
-  if (!profileName) {
-    return <NameGate onNamed={(name) => { setProfileNameGlobal(name); setProfileInput(profileName); }} />;
+  if (!profileNameRef()) {
+    return <NameGate onNamed={(name) => { setProfileNameGlobal(name); setProfileInput(profileNameRef()); }} />;
   }
 
   return (
