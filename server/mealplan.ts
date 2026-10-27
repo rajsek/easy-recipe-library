@@ -24,8 +24,6 @@ export interface NutritionEstimate {
 export interface PlanCard {
   name: string; url: string; channel: string; diet: string; meal: string; partial: boolean;
   nutrition: NutritionEstimate; // whole-recipe totals, not per portion
-  nutrition_per_portion: { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number } | null; // batch / portions, same assumption
-  portion_assumption: string;   // visible assumption, never a proven yield
   composition: 'standalone' | 'side_only';
   staple_suggestion?: { text: string; note: string };
   ingredients: string[];        // source ingredient lines, unmodified
@@ -317,15 +315,8 @@ export function generatePlan(input: PlanInput): PlanResult {
         used[s] += 1;
         const comp = compositionFor(r.name, r.meal);
         const nut = estimateNutrition(r.ingredients);
-        const per = nut.eligible
-          ? { kcal: Math.round(nut.kcal / servings), protein_g: Math.round(nut.protein_g / servings * 10) / 10,
-              fat_g: Math.round(nut.fat_g / servings * 10) / 10, carb_g: Math.round(nut.carb_g / servings * 10) / 10,
-              fibre_g: Math.round(nut.fibre_g / servings * 10) / 10 }
-          : null;
         recipe = { name: r.name, url: r.url, channel: r.channel, diet: r.diet, meal: r.meal, partial: !!r.partial,
           nutrition: nut,
-          nutrition_per_portion: per,
-          portion_assumption: `whole recipe treated as ${servings} portion(s) - assumption, not a stated yield`,
           composition: comp,
           staple_suggestion: comp === 'side_only' ? stapleFor(r.name) : undefined,
           ingredients: String(r.ingredients || '').split(/\n+/).map((x) => x.trim()).filter(Boolean) };
@@ -339,7 +330,7 @@ export function generatePlan(input: PlanInput): PlanResult {
     start: input.start, days, servings, lunch_other_days: lunchOtherDays, days_plan: out,
     assumptions: [
       'SAMPLE MENU ONLY - not personalized: dietary needs, allergies and who is eating are not confirmed yet.',
-      `Nutrition, where shown, lists the WHOLE RECIPE BATCH first and the per-portion split second; the batch number is not one meal. 'Portions' (currently ${servings}) is a visible division assumption, not a yield stated by any recipe or a health target. Cards whose source leaves a critical quantity unstated (like oil or eggs) show no numbers at all.`,
+      'Nutrition, where shown, is the WHOLE RECIPE BATCH total - not one meal. No recipe in this library states its yield, so no per-portion split is shown: the Share-of-batch calculator on a card only divides the batch total (1/2, 1/3, 1/4, 1/6) - arithmetic, not a serving recommendation. Cards whose source leaves a critical quantity unstated (like oil or eggs) show no numbers at all.',
       'Numbers appear only on cards that passed a full ingredient/unit audit: every critical quantity (staples, protein, oil, dairy, eggs) must be stated in the source and resolvable with ingredient-specific weights. Cards missing any of these say so instead of showing a partial sum.',
       'Video references below a slot are unextracted videos - reference pointers only, not recipe or nutrition claims.',
       'Lunch pattern: ' + (lunchOtherDays ? 'lunch every day (editable)' : 'no lunch on Monday, Wednesday, Friday; lunch on all other days (from the original request, editable)') + '.',

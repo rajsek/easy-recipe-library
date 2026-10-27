@@ -23,7 +23,7 @@ import { neon } from '@neondatabase/serverless';
 
 const COLS = {
   videos: ['video_id','title','channel','url','thumbnail_url','duration_s','views','category','diet_hint','yt_publish_date','date_first_added','date_last_checked','extraction_status'],
-  recipes: ['recipe_name','video_url','channel','diet','meal_type','time_notes','ingredients','steps','source_note','verified','date_checked'],
+  recipes: ['recipe_name','video_url','channel','diet','meal_type','time_notes','ingredients','steps','source_note','verified','date_checked','stated_yield'],
   rawextracts: ['video_id','title','channel_hint','yt_publish_date','description','transcript','extracted_at','parse_status'],
 };
 

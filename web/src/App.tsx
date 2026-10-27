@@ -100,6 +100,24 @@ function thumb(url: string): string {
   return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '';
 }
 
+function ShareCalc({ n }: { n: { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number } }) {
+  const [f, setF] = useState<number>(0);
+  const chips: [number, string][] = [[2, '1/2'], [3, '1/3'], [4, '1/4'], [6, '1/6']];
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  return (
+    <details className="plan-share">
+      <summary>Share of batch (calculator)</summary>
+      <div className="plan-share-body">
+        <span className="muted small">Divides the whole-batch total - arithmetic, not a serving recommendation. No recipe in this library states its yield.</span>
+        <span className="plan-share-chips">{chips.map(([d, l]) => (
+          <button key={d} type="button" className={'sharechip' + (f === d ? ' on' : '')} onClick={() => setF(d)}>{l}</button>
+        ))}</span>
+        {f > 0 && <span className="plan-share-out">1/{f} of batch: ~{Math.round(n.kcal / f).toLocaleString()} kcal - protein {r1(n.protein_g / f)}g, fat {r1(n.fat_g / f)}g, carbs {r1(n.carb_g / f)}g, fibre {r1(n.fibre_g / f)}g</span>}
+      </div>
+    </details>
+  );
+}
+
 function ActionButtons({ id, title, onSaved }: { id: string; title: string; onSaved: () => void }) {
   const [done, setDone] = useState('');
   async function mark(state: string) {
@@ -314,7 +332,6 @@ export default function App() {
   const planKey = (k: string) => 'plan_' + k + '__' + (profileName || 'default');
   const [planStart, setPlanStartRaw] = useState<string>(() => localStorage.getItem(planKey('start')) || '');
   const [planLunch, setPlanLunchRaw] = useState<boolean>(() => localStorage.getItem(planKey('lunch')) === '1');
-  const [planServings, setPlanServingsRaw] = useState<number>(() => parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
   const savePlanPrefs = (patch: Record<string, string>) => {
     if (!profileName) return; // server requires a name; anonymous prefs stay device-local
     apiFetch('/api/prefs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefs: patch }) }).catch(() => {});
@@ -325,12 +342,10 @@ export default function App() {
       const p = j.prefs || {};
       if (p.plan_start !== undefined) { setPlanStartRaw(p.plan_start); localStorage.setItem(planKey('start'), p.plan_start); }
       if (p.plan_lunch !== undefined) { setPlanLunchRaw(p.plan_lunch === '1'); localStorage.setItem(planKey('lunch'), p.plan_lunch); }
-      if (p.plan_servings !== undefined) { const n = parseInt(p.plan_servings, 10) || 2; setPlanServingsRaw(n); localStorage.setItem(planKey('servings'), String(n)); }
     }).catch(() => {});
   };
   const setPlanStart = (v: string) => { setPlanStartRaw(v); localStorage.setItem(planKey('start'), v); savePlanPrefs({ plan_start: v }); };
   const setPlanLunch = (v: boolean) => { setPlanLunchRaw(v); localStorage.setItem(planKey('lunch'), v ? '1' : '0'); savePlanPrefs({ plan_lunch: v ? '1' : '0' }); };
-  const setPlanServings = (v: number) => { setPlanServingsRaw(v); localStorage.setItem(planKey('servings'), String(v)); savePlanPrefs({ plan_servings: String(v) }); };
   const [fch, setFch] = useState(''); const [fdiet, setFdiet] = useState(''); const [fq, setFq] = useState('');
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
   const noteInputRef = useRef<HTMLInputElement>(null);
@@ -414,11 +429,10 @@ export default function App() {
     const params = new URLSearchParams();
     if (planStart) params.set('start', planStart);
     params.set('lunch', planLunch ? '1' : '0');
-    params.set('servings', String(planServings));
     const controller = new AbortController();
     apiFetch('/api/plan?' + params, {signal: controller.signal}).then((r) => { if (!r.ok) throw new Error('Plan failed'); return r.json(); }).then(j => { if (!controller.signal.aborted) setPlan(j); }).catch(() => { if (!controller.signal.aborted) setPlan({error: true}); });
     return () => controller.abort();
-  }, [tab, planStart, planLunch, planServings]);
+  }, [tab, planStart, planLunch]);
 
   // Ingredient typeahead: canonical chips from the verified library vocabulary
   // (fetched once from /api/ingredients - zero AI calls per keystroke). Unknown
@@ -549,7 +563,6 @@ export default function App() {
       loadHistory(); loadPlanPrefs();
       setPlanStartRaw(localStorage.getItem(planKey('start')) || '');
       setPlanLunchRaw(localStorage.getItem(planKey('lunch')) === '1');
-      setPlanServingsRaw(parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
     };
     return () => { onAuthRequired = () => {}; onProfileChanged = () => {}; };
   }, [loadHistory]);
@@ -968,11 +981,10 @@ export default function App() {
         {tab === 'plan' && (
           <section className="panel">
             <h2>30-day plan</h2>
-            <p className="plan-sample-note">Sample menu - not personalized. Dietary needs, allergies and who is eating are not confirmed yet; the dates, lunch pattern and servings below are editable.</p>
+            <p className="plan-sample-note">Sample menu - not personalized. Dietary needs, allergies and who is eating are not confirmed yet; the dates and lunch pattern below are editable. Nutrition, where shown, is the whole recipe batch - never one meal.</p>
             <div className="plan-controls">
               <label>Start date <input type="date" value={planStart} onChange={(e) => setPlanStart(e.target.value)} /></label>
               <label><input type="checkbox" checked={planLunch} onChange={(e) => setPlanLunch(e.target.checked)} /> Lunch every day</label>
-              <label>Servings (sample) <input type="number" min={1} max={10} value={planServings} onChange={(e) => setPlanServings(parseInt(e.target.value) || 2)} /></label>
             </div>
             {!plan && <p className="muted">Building plan...</p>}
             {plan && plan.error && <p className="muted">Plan could not be generated right now.</p>}
@@ -1006,12 +1018,12 @@ export default function App() {
                               {s.recipe.partial && <span className="muted small"> (partial)</span>}
                               <span className="plan-caption muted">video preview, not a dish photo</span>
                               {s.recipe.composition === 'side_only' && s.recipe.staple_suggestion && <span className="plan-caption muted">side dish - {s.recipe.staple_suggestion.text} (standard portion proposal)</span>}
-                              {s.recipe.nutrition && s.recipe.nutrition.eligible && s.recipe.nutrition_per_portion ? (
+                              {s.recipe.nutrition && s.recipe.nutrition.eligible ? (
                                 <span className="plan-nutrition">
                                   <span className="plan-nutrition-batch"><b>Whole recipe batch:</b> {s.recipe.nutrition.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition.protein_g}g, fat {s.recipe.nutrition.fat_g}g, carbs {s.recipe.nutrition.carb_g}g, fibre {s.recipe.nutrition.fibre_g}g</span>
-                                  <span className="plan-nutrition-portion"><b>Per portion</b> ({s.recipe.portion_assumption}): ~{s.recipe.nutrition_per_portion.kcal.toLocaleString()} kcal - protein {s.recipe.nutrition_per_portion.protein_g}g, fat {s.recipe.nutrition_per_portion.fat_g}g, carbs {s.recipe.nutrition_per_portion.carb_g}g, fibre {s.recipe.nutrition_per_portion.fibre_g}g</span>
                                   {s.recipe.nutrition.notes && s.recipe.nutrition.notes.length > 0 && <span className="muted small"> ({s.recipe.nutrition.notes.join('; ')})</span>}
                                   {s.recipe.nutrition.approx_used && <span className="muted small"> (includes standard-reference values for oil/butter/sugar where the source names the ingredient but not the brand)</span>}
+                                  <ShareCalc n={s.recipe.nutrition} />
                                 </span>
                               ) : (
                                 <span className="plan-nutrition-none">

@@ -202,3 +202,15 @@ a.rowtitle:hover { color:var(--leaf); }
 .pagenum.on { font-weight:700; text-decoration:underline; }
 .pager label { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
 .pager select { width:auto; min-width:0; padding:4px 6px; border:1px solid #c9c4b4; border-radius:6px; background:#fff; font-size:13px; }
+
+/* Share-of-batch calculator: opt-in arithmetic, never a portion claim */
+.plan-share { margin-top: 6px; font-size: 12.5px; }
+.plan-share summary { cursor: pointer; color: var(--leaf-deep); font-weight: 600; }
+.plan-share-body { display: block; padding: 6px 0 2px; }
+.plan-share-chips { display: inline-flex; gap: 6px; margin-left: 8px; }
+.sharechip { border: 1px solid var(--line); background: var(--card); border-radius: 999px; padding: 2px 12px; font-size: 12.5px; cursor: pointer; }
+.sharechip.on { background: var(--leaf); color: #fff; border-color: var(--leaf); }
+.plan-share-out { display: block; margin-top: 6px; font-size: 13px; }
+@media (max-width: 480px) {
+  .plan-share-chips { display: flex; margin: 6px 0 0; flex-wrap: wrap; }
+}

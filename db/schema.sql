@@ -15,7 +15,11 @@ CREATE TABLE IF NOT EXISTS recipes (
   seq BIGSERIAL PRIMARY KEY,
   recipe_name TEXT, video_url TEXT, channel TEXT, diet TEXT, meal_type TEXT,
   time_notes TEXT, ingredients TEXT, steps TEXT, source_note TEXT,
-  verified TEXT, date_checked TEXT
+  verified TEXT, date_checked TEXT,
+  -- Exact source wording of the stated yield when the video/description says
+  -- one ('makes 12 dosas', 'serves 3-4'); NULL when unstated. Never parsed
+  -- into a number: '12 dosas' and 'serves 3' are not interchangeable.
+  stated_yield TEXT
 );
 
 -- profile is a self-declared label for logical per-name separation on shared

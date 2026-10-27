@@ -61,7 +61,7 @@ test('side_only slots get a concrete staple proposal', () => {
   const lunch = plan.days_plan[0].slots.find(s => s.slot === 'lunch')!;
   assert.equal(lunch.recipe?.composition, 'side_only');
   assert.ok(lunch.recipe?.staple_suggestion?.text.includes('pair with'), JSON.stringify(lunch.recipe?.staple_suggestion));
-  assert.ok(lunch.recipe?.portion_assumption.includes('assumption'));
+  assert.ok(!('portion_assumption' in (lunch.recipe as object)), 'no portion assumption field');
 });
 
 test('estimateNutrition rejects cards with a missing critical egg count', () => {
@@ -88,13 +88,13 @@ test('estimateNutrition rejects proxy stand-ins that are not the same food', () 
   assert.ok(e.ineligible_reasons.some((r) => /stand-in|curd/i.test(r)), e.ineligible_reasons.join(' | '));
 });
 
-test('eligible card exposes whole-batch and per-portion numbers distinctly', () => {
+test('eligible card exposes whole-batch numbers only - no portion division', () => {
   const plan = generatePlan({ recipes: [{ name: 'X', url: 'u', channel: 'c', diet: 'Veg', meal: 'Lunch', ingredients: '200g paneer, 2 onions, 1 tbsp oil, 100g tomato', partial: false }], videos: [], start: '2026-10-27', days: 1, lunchOtherDays: true, servings: 2 });
   const r = plan.days_plan[0].slots.map((s) => s.recipe).find(Boolean)!;
   assert.equal(r.nutrition.eligible, true);
-  assert.ok(r.nutrition_per_portion, 'per-portion block must exist for eligible cards');
-  assert.equal(r.nutrition_per_portion!.kcal, Math.round(r.nutrition.kcal / 2));
-  assert.ok(/whole recipe treated as 2 portion/.test(r.portion_assumption));
+  assert.ok(!('nutrition_per_portion' in r), 'no per-portion block: yield is never stated by a source');
+  assert.ok(!('portion_assumption' in r), 'no portion assumption text');
+  assert.ok(r.nutrition.kcal > 0);
 });
 
 test('estimateNutrition rejects unquantified consumed fat hidden as a method note (tawa oil)', () => {
