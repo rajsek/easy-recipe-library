@@ -10,6 +10,7 @@
  */
 import 'dotenv/config';
 import express from 'express';
+import { videoMatchesDiet } from './video-diet.js';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -25,6 +26,7 @@ import { createHash } from 'node:crypto';
 import { CommTrace, MemoryTraceStore } from './comm-trace.js';
 import { randomUUID } from 'node:crypto';
 import { buildRankFn, buildClassifyFn, buildAskFn } from './ai.js';
+import { authGuardViolation } from './auth-guard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,10 +39,12 @@ const demoMemory: { history: any[] } = { history: [] };
 // Default: bind localhost only. Any non-local interface requires APP_TOKEN.
 const HOST = process.env.HOST || '127.0.0.1';
 const APP_TOKEN = process.env.APP_TOKEN || '';
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1']);
-if (!LOCAL_HOSTS.has(HOST) && !APP_TOKEN) {
-  console.error('Refusing to start: HOST=' + HOST + ' is not local and APP_TOKEN is not set. Set APP_TOKEN in .env (see README "Security").');
-  process.exit(1);
+{
+  const violation = authGuardViolation(process.env);
+  if (violation) {
+    console.error('Refusing to start: ' + violation);
+    process.exit(1);
+  }
 }
 app.use('/api', (req, res, next) => {
   if (!APP_TOKEN) return next();
@@ -67,7 +71,7 @@ app.get('/api/channels', async (_req, res) => res.json(await getChannels()));
 app.get('/api/videos', async (req, res) => {
   res.json(await getVideos({
     q: String(req.query.q || ''), channel: String(req.query.channel || ''),
-    diet: String(req.query.diet || ''), category: String(req.query.category || '')
+    diet: String(req.query.diet || ''), category: String(req.query.category || ''), sort: String(req.query.sort || '')
   }));
 });
 
@@ -163,18 +167,11 @@ app.post('/api/pick', async (req, res) => {
       for (const p of result.picks) { const m = String(p.url || '').match(/v=([\w-]{11})/); if (m) cardIds[m[1]] = true; }
       for (const id of Object.keys(seenIds)) cardIds[id] = true; // no repeats across pages
       const found = await retrieveVideos([note, dishes.join(' '), diet, meal].filter(Boolean).join(' '), 12, cardIds);
-      const dietOk = (h: string) => {
-        const hl = String(h || '').toLowerCase();
-        if (diet === 'Veg') return hl === 'veg';
-        if (diet === 'Non-veg') return /egg|non-?veg|chicken|mutton|fish|prawn|meat/i.test(hl);
-        if (diet === 'Egg' || diet === 'Contains egg') return /egg/.test(hl);
-        return hl !== ''; // unfiltered: still require a known hint value
-      };
       // Selected dishes are a HARD constraint on video alternatives too -
       // same OR-across-chips, every dish word in the video TITLE. A soft
       // retrieval boost alone could fill the gap with unrelated videos.
       const dishOk = (t: string) => dishes.length === 0 || dishes.some((d: string) => d.toLowerCase().split(/\s+/).every((w: string) => hasIngredientWord(t, w)));
-      if (found) videoAlts = found.filter((v) => v.score >= 0.45 && dietOk(v.diet_hint) && dishOk(v.title)).slice(0, 5 - result.picks.length)
+      if (found) videoAlts = found.filter((v) => v.score >= 0.45 && !!v.diet_hint && videoMatchesDiet(v.title, v.diet_hint, diet) && dishOk(v.title)).slice(0, 5 - result.picks.length)
         .map((v) => ({ video_id: v.video_id, title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, diet: v.diet_hint || '', status: 'video found - details not extracted yet' }));
     } catch { videoAlts = []; }
   }
@@ -288,7 +285,7 @@ app.post('/api/ask-ai', async (req, res) => {
       let zeroVideos: any[] = [];
       try {
         const found = await retrieveVideos(question + ' ' + diet + ' ' + meal, 10, {});
-        if (found) zeroVideos = found.filter((v) => v.score >= 0.45).slice(0, 8).map((v) => ({ title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, status: 'video found - details not extracted yet' }));
+        if (found) zeroVideos = found.filter((v) => v.score >= 0.45 && videoMatchesDiet(v.title, v.diet_hint, diet)).slice(0, 8).map((v) => ({ title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, status: 'video found - details not extracted yet' }));
       } catch { zeroVideos = []; }
       await commTrace.record({ ...traceBase, outbound_payload: 'ask-ai: ' + candidates.length + ' candidates after constraints; zeroReason: ' + zeroReason, reply_text: 'honest zero answer + ' + zeroVideos.length + ' video alternatives', handling: 'no candidates; no model call', status: 'ok' });
       return res.json({ answer: zeroReason + (zeroVideos.length > 0 ? ' Videos below are library matches whose ingredients and steps are not extracted yet.' : ''), request_id: traceId, interpreted, session: sessionEcho, videos: zeroVideos });
@@ -309,7 +306,7 @@ app.post('/api/ask-ai', async (req, res) => {
     let videoRefs: any[] = [];
     try {
       const found = await retrieveVideos(question + ' ' + diet + ' ' + meal, 10, cardIds);
-      if (found) videoRefs = found.filter((v) => v.score >= 0.45).slice(0, 8).map((v) => ({ video_id: v.video_id, title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, status: 'video found - details not extracted yet' }));
+      if (found) videoRefs = found.filter((v) => v.score >= 0.45 && videoMatchesDiet(v.title, v.diet_hint, diet)).slice(0, 8).map((v) => ({ video_id: v.video_id, title: v.title, channel: v.channel, url: 'https://www.youtube.com/watch?v=' + v.video_id, status: 'video found - details not extracted yet' }));
     } catch { videoRefs = []; }
     const { text, recipes: cited, videos: citedVideos } = await askFn(forModel, question, { diet, meal }, videoRefs);
     const usage = sink.calls.reduce((a, c) => ({ prompt: a.prompt + c.prompt_tokens, completion: a.completion + c.completion_tokens, total: a.total + c.total_tokens }), { prompt: 0, completion: 0, total: 0 });

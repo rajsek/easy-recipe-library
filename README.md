@@ -135,6 +135,9 @@ environment variables in the project settings (same meaning as `.env`):
 
 - `DATA_MODE=live`, `SHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` (the full
   service-account JSON on one line)
+  - or, with the Postgres/Neon backend: `DATA_MODE=pg`, `DATABASE_URL`
+  (a Neon pooled connection string; schema in `db/schema.sql`, one-time seed
+  via `DATABASE_URL=... node scripts/seed-pg.mjs` using `db/seed-export.json`)
 - `APP_TOKEN` - required here: serverless binds no fixed host, so the app
   relies on the token gate. The app opens with its unlock screen.
 

@@ -1,21 +1,35 @@
 /**
- * Data layer. Two modes:
+ * Data layer. Three modes:
  *  - demo:   bundled demo-data.json (public YouTube metadata + verified recipe
  *            cards + SYNTHETIC history). Writes stay in memory. No Google
  *            account needed. This is what you get with DATA_MODE=demo.
  *  - sheets: your private Google Sheet via a service account. The Sheet stays
  *            private; you share it once with the service account's email.
  *            See README for setup.
+ *  - pg:     Neon/Postgres via DATABASE_URL (schema in db/schema.sql, seed
+ *            via scripts/seed-pg.mjs). DATA_MODE=pg.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { videoDietHint, videoMatchesDiet } from './video-diet.js';
+import { createPgStore, type PgStore } from './data-pg.js';
+import { sortedResults, type SortKey } from '../web/src/result-sort.js';
 
-export interface VideoFilter { q?: string; channel?: string; diet?: string; category?: string; }
+export interface VideoFilter { q?: string; channel?: string; diet?: string; category?: string; sort?: string; }
 
 type Row = Record<string, any>;
 
 const MODE = (process.env.DATA_MODE || 'demo').toLowerCase();
+let pgStore: PgStore | null = null;
+function getPgStore(): PgStore {
+  if (!pgStore) {
+    const url = process.env.DATABASE_URL;
+    if (!url) throw new Error('DATA_MODE=pg requires DATABASE_URL');
+    pgStore = createPgStore(url);
+  }
+  return pgStore;
+}
 const SHEET_ID = process.env.SHEET_ID || '';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -61,6 +75,7 @@ async function sheets() {
 }
 
 async function readTab(name: string): Promise<Row[]> {
+  if (MODE === 'pg') return getPgStore().readTab(name) as unknown as Row[];
   if (MODE === 'demo') {
     const d = loadDemo();
     if (name === 'History') return d.history;
@@ -74,6 +89,7 @@ async function readTab(name: string): Promise<Row[]> {
 }
 
 async function appendRow(name: string, row: any[]): Promise<void> {
+  if (MODE === 'pg') { await getPgStore().appendRow(name, row.map((v) => (v == null ? null : String(v)))); return; }
   if (MODE === 'demo') return; // demo writes stay in memory in index.ts
   const s = await sheets();
   await s.spreadsheets.values.append({
@@ -84,7 +100,7 @@ async function appendRow(name: string, row: any[]): Promise<void> {
   });
 }
 
-// ---------- request queue (Sheets mode only) ----------
+// ---------- request queue (Sheets / pg modes) ----------
 // A "Queue" tab in the SAME spreadsheet is the shared request/answer channel
 // between this app and the owner's assistant. The app appends a request row;
 // the assistant reads pending rows and writes the answer back. Row content is
@@ -103,25 +119,30 @@ export async function getQueueRequest(id: string): Promise<{ status: string; ans
 
 // ---------- public API ----------
 export async function getVideos(filter: VideoFilter) {
-  const rows = await readTab('Videos');
+  return selectVideoRows(await readTab('Videos'), filter);
+}
+
+// Order the full matching source set before applying the existing result cap.
+export function selectVideoRows(rows: Row[], filter: VideoFilter) {
   const q = (filter.q || '').toLowerCase();
-  return rows.filter((r) => {
+  const matches = rows.filter((r) => {
     if (filter.channel && r.channel !== filter.channel) return false;
     // diet_hint is a title-derived hint, not a confirmed classification.
     // 'veg' matches only veg hints; 'non-veg' only explicit egg/meat hints;
     // blank hints are shown only in the unfiltered view.
-    if (filter.diet === 'veg' && String(r.diet_hint || '').toLowerCase() !== 'veg') return false;
-    if (filter.diet === 'non-veg' && !/egg|non-?veg|chicken|mutton|fish|prawn|meat/i.test(String(r.diet_hint || ''))) return false;
+    if (!videoMatchesDiet(r.title, r.diet_hint, filter.diet || '')) return false;
     if (filter.category && (r.category || '') !== filter.category) return false;
     if (q && String(r.title).toLowerCase().indexOf(q) === -1) return false;
     return true;
-  }).slice(0, 300).map((r) => ({
+  });
+  const sort: SortKey = filter.sort === 'name' || filter.sort === 'views' || filter.sort === 'newest' ? filter.sort : 'original';
+  return sortedResults(matches, sort, '', r => ({name: String(r.title || ''), views: r.views, published: r.yt_publish_date})).slice(0, 300).map((r) => ({
     id: r.video_id, title: r.title, channel: r.channel,
     // url/thumb columns are omitted from the snapshot (derivable from the id)
     url: r.url || (r.video_id ? 'https://www.youtube.com/watch?v=' + r.video_id : ''),
     thumb: r.thumbnail_url || (r.video_id ? 'https://i.ytimg.com/vi/' + r.video_id + '/mqdefault.jpg' : ''),
     views: r.views, category: r.category,
-    diet: r.diet_hint, published: r.yt_publish_date || '', status: r.extraction_status
+    diet: videoDietHint(r.title, r.diet_hint), published: r.yt_publish_date || '', status: r.extraction_status
   }));
 }
 
