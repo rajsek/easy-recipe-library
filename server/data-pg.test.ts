@@ -59,3 +59,17 @@ test('createPgStore rejects unknown tabs', async () => {
   await assert.rejects(store.appendRow('Nope', ['x']), /unknown tab/);
   assert.deepEqual(await store.readTab('Nope'), []);
 });
+
+test('readTab orders Settings by profile,key - the settings table has no seq column (prod incident)', async () => {
+  const seen: string[] = [];
+  const fake = { query: async (text: string) => { seen.push(text); return []; } };
+  const store = createPgStore('postgresql://unused', fake as any);
+  await store.readTab('Settings');
+  assert.ok(!/\bseq\b/.test(seen[0]), seen[0]);
+  assert.match(seen[0], /ORDER BY profile, key/);
+  for (const t of ['Videos', 'Recipes', 'History', 'Picks', 'Queue', 'RawExtracts']) {
+    seen.length = 0;
+    await store.readTab(t);
+    assert.match(seen[0], /ORDER BY seq/, t);
+  }
+});

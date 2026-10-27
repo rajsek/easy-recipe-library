@@ -17,7 +17,7 @@ import { neon } from '@neondatabase/serverless';
 /** Minimal SQL-over-HTTP client shape (neon().query); injectable for tests. */
 export interface PgClient { query(text: string, values?: any[]): Promise<any>; }
 
-export interface PgTab { table: string; cols: string[]; }
+export interface PgTab { table: string; cols: string[]; order?: string; }
 
 export const PG_TABS: Record<string, PgTab> = {
   Videos: { table: 'videos', cols: ['video_id','title','channel','url','thumbnail_url','duration_s','views','category','diet_hint','yt_publish_date','date_first_added','date_last_checked','extraction_status'] },
@@ -25,7 +25,7 @@ export const PG_TABS: Record<string, PgTab> = {
   History: { table: 'history', cols: ['date','video_id','title','state','notes','profile'] },
   Picks: { table: 'picks', cols: ['date','filters','note','suggested_video_ids','chosen_video_id','suggested_titles','profile'] },
   Queue: { table: 'queue', cols: ['request_id','ts','diet','meal','note','status','answer','reserved','profile'] },
-  Settings: { table: 'settings', cols: ['profile','key','value'] },
+  Settings: { table: 'settings', cols: ['profile','key','value'], order: 'profile, key' },
   RawExtracts: { table: 'rawextracts', cols: ['video_id','title','channel_hint','yt_publish_date','description','transcript','extracted_at','parse_status'] },
 };
 
@@ -66,7 +66,9 @@ export function createPgStore(url: string, client?: PgClient): PgStore {
     async readTab(name) {
       const tab = PG_TABS[name];
       if (!tab) return [];
-      const rows = (await sql.query(`SELECT ${tab.cols.join(', ')} FROM ${tab.table} ORDER BY seq`)) as any[];
+      // settings (and any future seq-less table) declares its own ordering;
+      // a blind ORDER BY seq breaks on tables without that column.
+      const rows = (await sql.query(`SELECT ${tab.cols.join(', ')} FROM ${tab.table} ORDER BY ${tab.order || 'seq'}`)) as any[];
       return rowsToObjects(tab.cols, rows);
     },
     async appendRow(name, row) {

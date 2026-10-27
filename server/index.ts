@@ -123,7 +123,12 @@ function requireProfile(req: any, res: any): string | null {
 }
 
 app.get('/api/prefs', async (req, res) => {
-  res.json({ prefs: await getSettings(normalizeProfile(req.get('x-profile'))) });
+  try {
+    res.json({ prefs: await getSettings(normalizeProfile(req.get('x-profile'))) });
+  } catch (e) {
+    console.error('prefs read failed:', (e as Error).message);
+    res.status(500).json({ error: 'prefs unavailable' });
+  }
 });
 
 app.post('/api/prefs', async (req, res) => {
@@ -135,8 +140,13 @@ app.post('/api/prefs', async (req, res) => {
   }
   const clean: Record<string, string> = {};
   for (const k of ['plan_start', 'plan_lunch', 'plan_servings']) if (body[k] !== undefined) clean[k] = String(body[k]);
-  await saveSettings(profile, clean);
-  res.json({ ok: true });
+  try {
+    await saveSettings(profile, clean);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('prefs save failed:', (e as Error).message);
+    res.status(500).json({ error: 'prefs unavailable' });
+  }
 });
 
 app.post('/api/history', async (req, res) => {
