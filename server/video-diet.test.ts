@@ -17,3 +17,19 @@ test('unknowns never become veg; eggless wording alone is not egg evidence',()=>
   assert.equal(videoMatchesDiet('Chicken potato','veg','veg'),false);
   assert.equal(videoDietHint('Chicken and eggs','veg'),'non-veg');
 });
+
+test('vegan claim in title downgrades a wrong non-veg source hint', () => {
+  assert.equal(videoDietHint('Beetroot Kola Urundai | Vegan snacks', 'non-veg'), 'veg');
+  assert.equal(videoDietHint('Ragda Chaat (White Peas Curry) | VEGAN', ''), 'veg');
+  assert.equal(videoDietHint('Crispy Veg Kola Balls | Perfect Tea-Time Snack', 'non-veg'), 'veg');
+});
+test('meat evidence still wins over a veg word; mixed claims keep the source hint', () => {
+  assert.equal(videoDietHint('Mutton Kola Urundai | Vegan snacks', 'non-veg'), 'non-veg');
+  assert.equal(videoDietHint('Veg and non-veg recipes compilation', 'non-veg'), 'non-veg');
+  assert.equal(videoDietHint('Chicken 65 | vegetarian restaurant week', ''), 'non-veg');
+});
+test('veg diet filter accepts the downgraded vegan title, still rejects unknown', () => {
+  assert.equal(videoMatchesDiet('Beetroot Kola Urundai | Vegan snacks', 'non-veg', 'Veg'), true);
+  assert.equal(videoMatchesDiet('Mutton Kola Urundai', 'non-veg', 'Veg'), false);
+  assert.equal(videoMatchesDiet('Some recipe', '', 'Veg'), false);
+});

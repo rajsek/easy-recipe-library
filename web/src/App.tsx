@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { taFilter, taNav, toggleSel, composePickNote } from './ta';
+import { taFilter, taNav, toggleSel, composePickNote, hasAskInput } from './ta';
 import { sortedResults, type SortKey, type TimeBucket } from './result-sort';
 import { verifyToken } from './unlock';
 import { apiFetch, profileNameRef, setProfileNameGlobal, setAuthToken, setOnAuthRequired, setOnProfileChanged } from './api';
@@ -789,10 +789,10 @@ export default function App() {
               </div>
               {askMode === 'ai' && aiOn && (
                 <>
-                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || (!pnote.trim() && selIngs.length === 0 && selDishes.length === 0)}>
+                  <button className="btn" onClick={doAskAi} disabled={askAiState === 'sending' || !hasAskInput(pnote, selIngs, selDishes, dishInput)}>
                     {askAiState === 'sending' ? 'Asking...' : 'Ask about the note above'}
                   </button>
-                  {!pnote.trim() && selIngs.length === 0 && selDishes.length === 0 && <p className="muted">Type a note, or pick ingredients or dishes above first.</p>}
+                  {!hasAskInput(pnote, selIngs, selDishes, dishInput) && <p className="muted">Type a note, or pick ingredients or dishes above first.</p>}
                 </>
               )}
               {askMode === 'whatsapp' && (

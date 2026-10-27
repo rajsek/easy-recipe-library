@@ -50,3 +50,11 @@ export function composePickNote(ings: string[], free: string, typedDish: string)
   if (f && f.toLowerCase() === head.toLowerCase()) return head;
   return head + (f ? (head ? ' - ' : '') + f : '');
 }
+
+// Anything typed or selected that should enable the Ask action. Typed dish
+// text counts even before it is picked from the list - the pick path sends
+// it via composePickNote, so Ask must not stay disabled with "type a note
+// first" while a dish is typed (prod gap on the beetroot flow).
+export function hasAskInput(freeNote: string, ings: string[], dishes: string[], typedDish: string): boolean {
+  return !!(freeNote.trim() || typedDish.trim() || ings.length || dishes.length);
+}

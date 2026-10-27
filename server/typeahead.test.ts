@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 // The shared typeahead helpers live with the web app so the ingredient AND
 // dish filters use one implementation; tested here from the server suite.
-import { taFilter, taNav, toggleSel, composePickNote } from '../web/src/ta.js';
+import { taFilter, taNav, toggleSel, composePickNote, hasAskInput } from '../web/src/ta.js';
 
 test('taFilter: prefix matches rank before inner matches, max 6, min 2 chars', () => {
   const vocab = ['Pongal', 'Ven Pongal', 'Poli', 'Paruppu Poli', 'Tomato Pongal', 'Podi', 'Paniyaram', 'Paneer Butter Masala'];
@@ -58,4 +58,13 @@ test('composePickNote: empty/blank typed dish changes nothing', () => {
 test('composePickNote: chip and identical typed text dedup case-insensitively', () => {
   assert.equal(composePickNote(['Beetroot'], '', 'beetroot'), 'Beetroot');
   assert.equal(composePickNote([], 'beetroot', 'beetroot'), 'beetroot');
+});
+
+test('hasAskInput: typed dish enables Ask even with nothing else set', () => {
+  assert.equal(hasAskInput('', [], [], 'beetroot'), true);
+  assert.equal(hasAskInput('', [], [], ''), false);
+  assert.equal(hasAskInput('quick', [], [], ''), true);
+  assert.equal(hasAskInput('', ['paneer'], [], ''), true);
+  assert.equal(hasAskInput('', [], ['ven pongal'], ''), true);
+  assert.equal(hasAskInput('  ', [], [], '  '), false);
 });
