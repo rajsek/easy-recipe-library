@@ -157,8 +157,11 @@ export function generatePlan(input: PlanInput): PlanResult {
   for (let i = 0; i < days; i++) {
     const d = new Date(startDate.getTime() + i * 86400000);
     const wd = d.getUTCDay(); // 0 Sun ... 6 Sat
+    // Original request: Mon/Wed/Fri are 3-slot days (no lunch); all other
+    // days include lunch. Editable default pending user confirmation.
+    const noLunch = wd === 1 || wd === 3 || wd === 5;
     const active: SlotId[] = ['breakfast'];
-    if (lunchOtherDays || wd === 3 || wd === 6) active.push('lunch');
+    if (lunchOtherDays || !noLunch) active.push('lunch');
     active.push('snack', 'dinner');
     const dateStr = d.toISOString().slice(0, 10);
     const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wd];
@@ -178,13 +181,12 @@ export function generatePlan(input: PlanInput): PlanResult {
   return {
     start: input.start, days, servings, lunch_other_days: lunchOtherDays, days_plan: out,
     assumptions: [
-      `Nutrition is a per-serving estimate for ${servings} servings, from IFCT 2017 per-100g reference values (ICMR-NIN), matched by ingredient keyword.`,
-      'Coverage % = share of stated ingredient weight that matched a reference entry; unmapped ingredients (e.g. some dals, spice pastes) are excluded.',
-      'Cards whose source stated no quantities have no estimate.',
-      'Approximate reference entries are used for cooking oil/ghee and curd (flagged).',
+      'SAMPLE MENU ONLY - not personalized: dietary needs, allergies and who is eating are not confirmed yet.',
+      `Servings (${servings}) is a sample, editable count - not a recommended portion.`,
+      'Numeric nutrition is hidden until every card passes a full ingredient, unit-conversion, recipe-yield and serving audit; weight coverage alone can hide cooking oil or a missing staple, so partial sums are not shown.',
       'Video references below a slot are unextracted videos - reference pointers only, not recipe or nutrition claims.',
-      'Lunch is planned ' + (lunchOtherDays ? 'every day' : 'on Wednesday and Saturday only') + '.',
+      'Lunch pattern: ' + (lunchOtherDays ? 'lunch every day (editable)' : 'no lunch on Monday, Wednesday, Friday; lunch on all other days (from the original request, editable)') + '.',
     ],
-    source_note: 'ICMR-NIN Indian Food Composition Tables 2017 (nin.res.in/ebooks/IFCT2017.pdf); energy converted kJ->kcal (/4.184).',
+    source_note: 'Nutrition reference (not yet shown as numbers): ICMR-NIN Indian Food Composition Tables 2017, per-100g values, energy kJ->kcal (/4.184).',
   };
 }

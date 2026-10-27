@@ -41,9 +41,9 @@ test('generatePlan produces 30 days with slot rules and rotation', () => {
   assert.ok(d0.slots[0].video_refs.length >= 1);
 });
 
-test('generatePlan lunch only Wed/Sat when lunchOtherDays=false', () => {
+test('generatePlan excludes lunch Mon/Wed/Fri when lunchOtherDays=false', () => {
   const recipes = [{ name: 'R', url: 'u', channel: 'c', diet: 'Veg', meal: 'Lunch', ingredients: '100g rice', partial: false }];
   const plan = generatePlan({ recipes, videos: [], start: '2026-10-27', days: 7, lunchOtherDays: false, servings: 2 });
   const lunches = plan.days_plan.filter(d => d.slots.some(s => s.slot === 'lunch'));
-  assert.deepEqual(lunches.map(l => l.weekday), ['Wednesday', 'Saturday']);
+  assert.deepEqual(lunches.map(l => l.weekday), ['Tuesday', 'Thursday', 'Saturday', 'Sunday']);
 });

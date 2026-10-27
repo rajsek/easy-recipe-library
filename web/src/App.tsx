@@ -257,7 +257,7 @@ export default function App() {
   const [videos, setVideos] = useState<VideoItem[] | null>(null);
   const [plan, setPlan] = useState<any | null>(null);
   const [planStart, setPlanStart] = useState<string>('');
-  const [planLunch, setPlanLunch] = useState<boolean>(true);
+  const [planLunch, setPlanLunch] = useState<boolean>(false);
   const [planServings, setPlanServings] = useState<number>(2);
   const [fch, setFch] = useState(''); const [fdiet, setFdiet] = useState(''); const [fq, setFq] = useState('');
   const [pdiet, setPdiet] = useState(''); const [pmeal, setPmeal] = useState(''); const [pnote, setPnote] = useState('');
@@ -329,6 +329,7 @@ export default function App() {
 
   useEffect(() => {
     if (tab !== 'plan') return;
+    if (!planStart) setPlanStart(new Date().toLocaleDateString('en-CA'));
     setPlan(null);
     const params = new URLSearchParams();
     if (planStart) params.set('start', planStart);
@@ -827,10 +828,11 @@ export default function App() {
         {tab === 'plan' && (
           <section className="panel">
             <h2>30-day plan</h2>
+            <p className="plan-sample-note">Sample menu - not personalized. Dietary needs, allergies and who is eating are not confirmed yet; the dates, lunch pattern and servings below are editable.</p>
             <div className="plan-controls">
               <label>Start date <input type="date" value={planStart} onChange={(e) => setPlanStart(e.target.value)} /></label>
               <label><input type="checkbox" checked={planLunch} onChange={(e) => setPlanLunch(e.target.checked)} /> Lunch every day</label>
-              <label>Servings <input type="number" min={1} max={10} value={planServings} onChange={(e) => setPlanServings(parseInt(e.target.value) || 2)} /></label>
+              <label>Servings (sample) <input type="number" min={1} max={10} value={planServings} onChange={(e) => setPlanServings(parseInt(e.target.value) || 2)} /></label>
             </div>
             {!plan && <p className="muted">Building plan...</p>}
             {plan && plan.error && <p className="muted">Plan could not be generated right now.</p>}
@@ -850,9 +852,7 @@ export default function App() {
                           <a href={s.recipe.url} target="_blank" rel="noreferrer">{s.recipe.name}</a>
                           {s.recipe.partial && <span className="muted"> (partial)</span>}
                           {' '}
-                          {s.recipe.nutrition.unavailable
-                            ? <span className="muted">estimate unavailable</span>
-                            : <span className="muted">~{s.recipe.nutrition.kcal} kcal/serving (covers ~{s.recipe.nutrition.coverage_pct}% of stated ingredients{s.recipe.nutrition.approx_used ? ', approx.' : ''})</span>}
+                          <span className="muted">nutrition estimate pending full ingredient/unit audit</span>
                         </>) : <span className="muted">no extracted card for this slot yet</span>}
                         {s.video_refs.length > 0 && (
                           <span className="plan-vref"> or see video: {s.video_refs.map((v: any, i: number) => (

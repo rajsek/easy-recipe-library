@@ -153,3 +153,4 @@ a.rowtitle:hover { color:var(--leaf); }
 .plan-slot { padding: 3px 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
 .plan-slot-name { display: inline-block; min-width: 74px; font-weight: 600; text-transform: capitalize; }
 .plan-vref { font-size: 0.88em; }
+.plan-sample-note { background: #fdf3e0; border: 1px solid #e8d9b0; border-radius: 6px; padding: 8px 10px; font-size: 0.92em; }
