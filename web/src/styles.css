@@ -174,3 +174,8 @@ a.rowtitle:hover { color:var(--leaf); }
 .profilebox { display:flex; align-items:center; gap:6px; font-size:13px; color:#f4f1e8; }
 .profilebox input { background:rgba(255,255,255,.14); border:1px solid rgba(255,255,255,.35); color:#f4f1e8; border-radius:6px; padding:4px 8px; font-size:13px; width:140px; }
 .profilebox input::placeholder { color:rgba(244,241,232,.6); }
+.pager { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin:14px 0; }
+.pager-nums { display:inline-flex; gap:4px; align-items:center; }
+.pagenum.on { font-weight:700; text-decoration:underline; }
+.pager label { display:inline-flex; align-items:center; gap:6px; margin-left:8px; }
+.pager select { width:auto; min-width:0; padding:4px 6px; border:1px solid #c9c4b4; border-radius:6px; background:#fff; font-size:13px; }

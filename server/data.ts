@@ -190,10 +190,15 @@ export async function getRecipeRows(): Promise<Row[]> {
 }
 
 /** Rows belonging to one profile namespace. Rows with no profile predate
- *  profiles: they stay visible ONLY to the default (unnamed) profile, never
- *  copied or re-attributed to a named one. */
+ *  profiles: they are LEGACY. They stay archived in the DB untouched, but no
+ *  read path shows them - a blank name would otherwise expose the previous
+ *  owner's rows to every new viewer, and copying them into a named profile
+ *  without knowing the owner's confirmed name would mis-attribute them.
+ *  Recovery: once the owner confirms their profile name, a one-time manual
+ *  mapping can point the legacy rows at it. */
 function forProfile(rows: Row[], profile: string): Row[] {
   const key = normalizeProfile(profile);
+  if (!key) return [];
   return rows.filter((r) => normalizeProfile(r.profile) === key);
 }
 

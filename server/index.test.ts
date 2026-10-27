@@ -245,7 +245,8 @@ test('mutable writes require a name; reads stay open for the legacy namespace', 
   const anonPick = await fetch(base + '/api/pick', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ diet: '', meal: '', note: 'corn' }) });
   assert.equal(anonPick.status, 400, 'blank-profile pick rejected');
   const anonRead = await fetch(base + '/api/history');
-  assert.equal(anonRead.status, 200, 'blank-profile read stays open (legacy rows recoverable)');
+  assert.equal(anonRead.status, 200, 'blank-profile read stays open');
+  assert.deepEqual(await anonRead.json(), [], 'blank name sees NO history - legacy rows stay archived but hidden from every new viewer');
 });
 
 test('plan prefs persist per profile and follow the name, not the device', async () => {

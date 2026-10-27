@@ -510,7 +510,17 @@ export default function App() {
   useEffect(() => {
     onAuthRequired = () => setLocked(true);
     onProfileChanged = () => {
-      setProfileInput(profileName); loadHistory(); loadPlanPrefs();
+      // Switching person: drop everything the previous profile had on screen
+      // immediately - selections, results, queue polls, cached prefs - before
+      // loading the new profile's data. Nothing may bleed across.
+      setProfileInput(profileName);
+      setSelIngs([]); setSelDishes([]); setDishInput('');
+      setPickResult(null); setExtraPicks([]); setExtraVideos([]); setSeenIds([]); setPickForm(null);
+      setAskAiResult(null); setAskAiState('idle'); setAskAiError(''); setSessionInfo(null);
+      const sid = crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('ask_session_id', sid); setSessionId(sid);
+      setHistory([]);
+      loadHistory(); loadPlanPrefs();
       setPlanStartRaw(localStorage.getItem(planKey('start')) || '');
       setPlanLunchRaw(localStorage.getItem(planKey('lunch')) === '1');
       setPlanServingsRaw(parseInt(localStorage.getItem(planKey('servings')) || '2', 10) || 2);
