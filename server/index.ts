@@ -414,7 +414,17 @@ app.get('/api/ask/:id', async (req, res) => {
 
 // Built frontend (npm run build). In dev, use the Vite server instead.
 const dist = path.join(__dirname, '..', 'web', 'dist');
-app.use(express.static(dist));
+// Vite emits content-hashed files under /assets/ (index-<hash>.js etc.), so
+// they are safe to cache immutably; a changed build ships a different URL.
+// index.html itself stays at the default (no explicit caching) so returning
+// visitors always revalidate the entry page.
+app.use(express.static(dist, {
+  setHeaders: (res, filePath) => {
+    if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  }
+}));
 app.get('*', (req, res, next) => {
   // A real file path that is not on disk (e.g. a stale cached page asking
   // for a previous deploy's hashed bundle) must 404. Serving index.html
