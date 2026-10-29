@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { videoDietHint, videoMatchesDiet } from './video-diet.js';
 import { createPgStore, type PgStore } from './data-pg.js';
-import { sortedResults, type SortKey } from '../web/src/result-sort.js';
+import { sortedResults, interleaveChannels, type SortKey } from '../web/src/result-sort.js';
 
 export interface VideoFilter { q?: string; channel?: string; diet?: string; category?: string; sort?: string; }
 
@@ -142,8 +142,14 @@ export function selectVideoRows(rows: Row[], filter: VideoFilter) {
     if (q && String(r.title).toLowerCase().indexOf(q) === -1) return false;
     return true;
   });
-  const sort: SortKey = filter.sort === 'name' || filter.sort === 'views' || filter.sort === 'newest' ? filter.sort : 'original';
-  return sortedResults(matches, sort, '', r => ({name: String(r.title || ''), views: r.views, published: r.yt_publish_date})).map((r) => ({
+  // Default (no sort requested / 'mixed'): interleave channels round-robin.
+  // Rows are appended channel-by-channel by extraction, so plain insertion
+  // order shows long single-channel runs. Explicit 'original' keeps insertion.
+  const sort: SortKey = filter.sort === 'name' || filter.sort === 'views' || filter.sort === 'newest' || filter.sort === 'original' ? filter.sort as SortKey : 'mixed';
+  const ordered = sort === 'mixed'
+    ? interleaveChannels(matches, (r) => String(r.channel || ''))
+    : sortedResults(matches, sort, '', r => ({name: String(r.title || ''), views: r.views, published: r.yt_publish_date}));
+  return ordered.map((r) => ({
     id: r.video_id, title: r.title, channel: r.channel,
     // url/thumb columns are omitted from the snapshot (derivable from the id)
     url: r.url || (r.video_id ? 'https://www.youtube.com/watch?v=' + r.video_id : ''),

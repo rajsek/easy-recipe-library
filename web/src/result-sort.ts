@@ -1,4 +1,9 @@
-export type SortKey = 'original' | 'name' | 'time-asc' | 'time-desc' | 'views' | 'newest';
+export type SortKey = 'original' | 'mixed' | 'name' | 'time-asc' | 'time-desc' | 'views' | 'newest';
+
+/** Round-robin one row per channel in first-appearance order, preserving
+ *  within-channel order. Deterministic and lossless: every row is kept.
+ *  Used for the default library view so extraction batches (which arrive
+ *  channel-by-channel) do not display as single-channel runs. */
 // Bins match the data we actually have (recipe-linked durations cluster under
 // 30 min). A stated cook time always wins; when none is stated the LINKED
 // VIDEO's length is the fallback criterion - labelled, never silent.
@@ -54,9 +59,25 @@ export function viewCount(raw: unknown): number | undefined {
   return Number.isSafeInteger(n) ? n : undefined;
 }
 
+export function interleaveChannels<T>(items: T[], channel: (x: T) => string): T[] {
+  const buckets = new Map<string, T[]>();
+  for (const x of items) {
+    const c = channel(x);
+    if (!buckets.has(c)) buckets.set(c, []);
+    buckets.get(c)!.push(x);
+  }
+  const queues = [...buckets.values()];
+  const out: T[] = [];
+  for (let i = 0; out.length < items.length; i++) {
+    const q = queues[i % queues.length];
+    if (q.length) out.push(q.shift()!);
+  }
+  return out;
+}
+
 export function sortedResults<T>(
   items: T[], sort: SortKey, bucket: TimeBucket,
-  fields: (x: T) => { name: string; time?: string; duration_s?: unknown; views?: unknown; published?: unknown }
+  fields: (x: T) => { name: string; time?: string; duration_s?: unknown; views?: unknown; published?: unknown; channel?: string }
 ): T[] {
   const rows = items.map((x, i) => {
     const value = fields(x);
@@ -77,6 +98,11 @@ export function sortedResults<T>(
     if (!r.filter) return false;
     return bucketOf(r.filter.minutes) === bucket;
   });
+  // Mixed channels: round-robin across channels when the caller supplies one;
+  // without channel info it degrades to the stable original order.
+  if (sort === 'mixed' && rows.some((r) => r.channel !== undefined)) {
+    return interleaveChannels(rows, (r) => String(r.channel ?? '')).map((r) => r.x);
+  }
   const numeric = (a: number | undefined, b: number | undefined, desc = false) =>
     a === undefined ? (b === undefined ? 0 : 1) : b === undefined ? -1 : desc ? b - a : a - b;
   rows.sort((a, b) => (sort === 'name' ? a.name.localeCompare(b.name)

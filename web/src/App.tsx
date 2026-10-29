@@ -320,7 +320,7 @@ export default function App() {
   const [taOpen, setTaOpen] = useState(false);
   const [taIndex, setTaIndex] = useState(0);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
-  const [resultSort, setResultSort] = useState<SortKey>('original');
+  const [resultSort, setResultSort] = useState<SortKey>('mixed');
   const [timeBucket, setTimeBucket] = useState<TimeBucket>('');
   const [dataMode, setDataMode] = useState<string>('');
   const [locked, setLocked] = useState(false);
@@ -380,7 +380,7 @@ export default function App() {
   const [aiOn, setAiOn] = useState(false);
   const [semanticInfo, setSemanticInfo] = useState<{ available: boolean; reason?: string; version?: string } | null>(null);
 
-  useEffect(() => { setResultSort('original'); setTimeBucket(''); }, [tab]);
+  useEffect(() => { setResultSort('mixed'); setTimeBucket(''); }, [tab]);
 
   const loadHistory = useCallback(() => {
     apiFetch('/api/history').then((r) => r.json()).then(setHistory).catch(() => {});
@@ -412,7 +412,7 @@ export default function App() {
     if (fch) params.set('channel', fch);
     if (fdiet) params.set('diet', fdiet);
     if (fq) params.set('q', fq);
-    if (resultSort === 'name' || resultSort === 'views' || resultSort === 'newest') params.set('sort', resultSort);
+    if (resultSort === 'name' || resultSort === 'views' || resultSort === 'newest' || resultSort === 'original') params.set('sort', resultSort);
     params.set('page', String(videoPage));
     params.set('page_size', String(videoPageSize));
     const controller = new AbortController();
@@ -745,7 +745,7 @@ export default function App() {
 
         {(tab === 'recipes' || tab === 'pick' || INDEX_TABS.has(tab)) && <section className="filters" aria-label="result sorting">
           <label>Sort <select aria-label="sort results" value={resultSort} onChange={e=>setResultSort(e.target.value as SortKey)}>
-            <option value="original">Original order</option><option value="name">Name A-Z</option>
+            <option value="mixed">Mixed channels</option><option value="original">Original order</option><option value="name">Name A-Z</option>
             {!INDEX_TABS.has(tab) && <><option value="time-asc">Stated cook time: shortest</option><option value="time-desc">Stated cook time: longest</option></>}
             {INDEX_TABS.has(tab) && <><option value="views">Video views: highest</option><option value="newest">Newest published</option></>}
           </select></label>
@@ -756,7 +756,7 @@ export default function App() {
 
         {tab === 'recipes' && (
           recipes.length === 0 ? <p className="muted">No checked recipes yet.</p>
-            : <div className="grid">{sortedResults(recipes,resultSort,timeBucket,c=>({name:c.name,time:c.time,duration_s:c.duration_s})).map((c) => <RecipeCard key={c.name} c={c} onSaved={loadHistory} />)}</div>
+            : <div className="grid">{sortedResults(recipes,resultSort,timeBucket,c=>({name:c.name,time:c.time,duration_s:c.duration_s,channel:c.channel})).map((c) => <RecipeCard key={c.name} c={c} onSaved={loadHistory} />)}</div>
         )}
 
         {tab === 'pick' && pickResult && (

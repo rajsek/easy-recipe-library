@@ -10,6 +10,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { interleaveChannels } from '../web/src/result-sort.js';
 
 export interface RefEntry { kcal: number; protein_g: number; fat_g: number; carb_g: number; fibre_g: number; approx?: boolean; note?: string;
   ca_mg?: number; fe_mg?: number; mg_mg?: number; k_mg?: number; zn_mg?: number; na_mg?: number; micro_source?: string; }
@@ -319,6 +320,34 @@ const VIDEO_CAT: Record<SlotId, RegExp> = {
   breakfast: /breakfast/i, lunch: /lunch|dinner/i, snack: /snack/i, dinner: /lunch|dinner/i,
 };
 
+
+/** Deterministic FNV-1a hash -> seed. Plan variety must be reproducible for a
+ *  given start date (same date, same plan) but different across dates - the
+ *  old fixed counter walk served the identical rotation forever. */
+function hashSeed(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function mulberry32(a: number) {
+  return () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function shuffledPool<T>(arr: T[], seed: number): T[] {
+  const rnd = mulberry32(seed);
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+const isEggDish = (ingredients: string) => /\begg/i.test(ingredients || '');
+
 export function generatePlan(input: PlanInput): PlanResult {
   const days = Math.min(Math.max(1, input.days ?? 30), 45);
   const servings = Math.min(Math.max(1, input.servings ?? 2), 10);
@@ -329,12 +358,47 @@ export function generatePlan(input: PlanInput): PlanResult {
     for (const s of slotsFor(r.meal)) pools[s].push(r);
   }
   const startDate = new Date(input.start + 'T00:00:00Z');
-  const used: Record<SlotId, number> = { breakfast: 0, lunch: 0, snack: 0, dinner: 0 };
+  // Variety selection state: each slot's pool is deterministically shuffled
+  // (seeded by the start date) and consumed without repeats; a reshuffled
+  // cycle starts only when the pool is exhausted. Constraints, relaxed in
+  // order when nothing satisfies them: no dish twice on the same day, no egg
+  // dish right after an egg dish in the same slot, no immediate repeat across
+  // a refill boundary.
+  const remaining: Record<SlotId, typeof input.recipes> = { breakfast: [], lunch: [], snack: [], dinner: [] };
+  const cycles: Record<SlotId, number> = { breakfast: 0, lunch: 0, snack: 0, dinner: 0 };
+  const lastEgg: Record<SlotId, boolean> = { breakfast: false, lunch: false, snack: false, dinner: false };
+  const prevPick: Record<SlotId, string> = { breakfast: '', lunch: '', snack: '', dinner: '' };
+  const pickCount: Record<SlotId, number> = { breakfast: 0, lunch: 0, snack: 0, dinner: 0 };
+  for (const s of SLOT_ORDER) remaining[s] = shuffledPool(pools[s], hashSeed(input.start + ':' + s));
+  const pickFor = (s: SlotId, dayUsed: Set<string>): (typeof input.recipes)[number] | null => {
+    const pool = pools[s];
+    if (!pool.length) return null;
+    let rem = remaining[s];
+    if (!rem.length) { cycles[s] += 1; remaining[s] = rem = shuffledPool(pool, hashSeed(input.start + ':' + s + ':cycle' + cycles[s])); }
+    const eggBlocked = lastEgg[s];
+    let idx = rem.findIndex((r) => !dayUsed.has(r.url) && r.url !== prevPick[s] && !(eggBlocked && isEggDish(r.ingredients)));
+    if (idx < 0) idx = rem.findIndex((r) => !dayUsed.has(r.url) && !(eggBlocked && isEggDish(r.ingredients)));
+    if (idx < 0) idx = rem.findIndex((r) => !dayUsed.has(r.url) && r.url !== prevPick[s]);
+    if (idx < 0) idx = rem.findIndex((r) => !dayUsed.has(r.url));
+    if (idx < 0) idx = 0;
+    const [r] = rem.splice(idx, 1);
+    lastEgg[s] = isEggDish(r.ingredients);
+    prevPick[s] = r.url;
+    dayUsed.add(r.url);
+    pickCount[s] += 1;
+    return r;
+  };
   const vidPool: Record<SlotId, VideoRef[]> = { breakfast: [], lunch: [], snack: [], dinner: [] };
-  for (const v of input.videos) {
-    if (String(v.status).toLowerCase() === 'parsed-to-recipe') continue;
-    for (const s of SLOT_ORDER) if (VIDEO_CAT[s].test(v.category || '') && vidPool[s].length < 12)
-      vidPool[s].push({ title: v.title, url: v.url, channel: v.channel });
+  {
+    // Channel-interleave before the cap: input order is insertion order
+    // (channel-contiguous), so a naive first-12 is a single-channel list.
+    const cands: Record<SlotId, VideoRef[]> = { breakfast: [], lunch: [], snack: [], dinner: [] };
+    for (const v of input.videos) {
+      if (String(v.status).toLowerCase() === 'parsed-to-recipe') continue;
+      for (const s of SLOT_ORDER) if (VIDEO_CAT[s].test(v.category || ''))
+        cands[s].push({ title: v.title, url: v.url, channel: v.channel });
+    }
+    for (const s of SLOT_ORDER) vidPool[s] = interleaveChannels(cands[s], (v) => v.channel).slice(0, 12);
   }
   const out: PlanDay[] = [];
   for (let i = 0; i < days; i++) {
@@ -348,12 +412,11 @@ export function generatePlan(input: PlanInput): PlanResult {
     active.push('snack', 'dinner');
     const dateStr = d.toISOString().slice(0, 10);
     const weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][wd];
+    const dayUsed = new Set<string>();
     const slots: PlanSlot[] = active.map((s) => {
-      const pool = pools[s];
       let recipe: PlanCard | null = null;
-      if (pool.length) {
-        const r = pool[used[s] % pool.length];
-        used[s] += 1;
+      const r = pickFor(s, dayUsed);
+      if (r) {
         const comp = compositionFor(r.name, r.meal);
         const nut = estimateNutrition(r.ingredients);
         recipe = { name: r.name, url: r.url, channel: r.channel, diet: r.diet, meal: r.meal, partial: !!r.partial,
@@ -362,7 +425,7 @@ export function generatePlan(input: PlanInput): PlanResult {
           staple_suggestion: comp === 'side_only' ? stapleFor(r.name) : undefined,
           ingredients: String(r.ingredients || '').split(/\n+/).map((x) => x.trim()).filter(Boolean) };
       }
-      const vrefs = vidPool[s].slice((used[s] * 2) % Math.max(1, vidPool[s].length), (used[s] * 2) % Math.max(1, vidPool[s].length) + 2);
+      const vrefs = vidPool[s].slice((pickCount[s] * 2) % Math.max(1, vidPool[s].length), (pickCount[s] * 2) % Math.max(1, vidPool[s].length) + 2);
       return { slot: s, recipe, video_refs: vrefs };
     });
     out.push({ date: dateStr, weekday, slots });

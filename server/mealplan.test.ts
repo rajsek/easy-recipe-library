@@ -173,3 +173,31 @@ test('unmatched cards have no minerals and withheld sodium', () => {
   assert.equal(e.minerals, null);
   assert.equal(e.sodium_mg, null);
 });
+
+test('generatePlan varies by start date, avoids same-day duplicates and spaces egg dishes', () => {
+  const mk = (name: string, meal: string, ing: string, ch: string) => ({ name, url: 'u-' + name, channel: ch, diet: 'Veg', meal, ingredients: ing, partial: false });
+  const recipes = Array.from({ length: 12 }, (_, i) => mk('B' + i, 'Breakfast', i < 3 ? '2 eggs, 50g rice' : '100g rice', 'CH' + (i % 3)))
+    .concat(Array.from({ length: 12 }, (_, i) => mk('LD' + i, 'Lunch, Dinner', '100g rice', 'CH' + (i % 3))))
+    .concat(Array.from({ length: 8 }, (_, i) => mk('S' + i, 'Snack', '50g flour', 'CH' + (i % 2))));
+  const videos = Array.from({ length: 8 }, (_, i) => ({ id: 'v' + i, title: 'V' + i, url: 'uv' + i, channel: 'CH' + (i % 2), category: 'breakfast', status: 'unextracted' }));
+  const input = { recipes, videos, days: 30, lunchOtherDays: true, servings: 2 };
+  const p1 = generatePlan({ ...input, start: '2026-10-27' });
+  const p2 = generatePlan({ ...input, start: '2026-11-15' });
+  // same start -> identical plan (reproducible); different start -> different rotation
+  assert.deepEqual(generatePlan({ ...input, start: '2026-10-27' }), p1);
+  assert.notDeepEqual(p1.days_plan.map(d => d.slots[0].recipe?.name), p2.days_plan.map(d => d.slots[0].recipe?.name));
+  // no repeat within a full pool cycle: first 12 breakfasts are all distinct
+  const b = p1.days_plan.map(d => d.slots[0].recipe?.name);
+  assert.equal(new Set(b.slice(0, 12)).size, 12, 'breakfasts distinct within pool cycle');
+  // no dish twice the same day (lunch/dinner pools overlap in this fixture)
+  for (const d of p1.days_plan) {
+    const urls = d.slots.map(s => s.recipe?.url).filter(Boolean);
+    assert.equal(new Set(urls).size, urls.length, 'same-day duplicate on ' + d.date);
+  }
+  // egg never on consecutive days in the same slot while non-egg alternatives remain
+  const eggB = p1.days_plan.map(d => /egg/i.test((d.slots[0].recipe?.ingredients || []).join(' ')));
+  for (let i = 1; i < eggB.length; i++) assert.ok(!(eggB[i] && eggB[i - 1]), 'egg on consecutive days at ' + p1.days_plan[i].date);
+  // video refs mix channels
+  const refCh = new Set(p1.days_plan[0].slots[0].video_refs.map(v => v.channel));
+  assert.ok(refCh.size > 1, 'video refs are not single-channel');
+});
